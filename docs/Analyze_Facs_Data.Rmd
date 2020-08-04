@@ -1,0 +1,133 @@
+---
+title: "Analyze FACS data"
+output: 
+  html_notebook: 
+    toc: yes
+    fig_caption: yes
+    number_sections: yes
+author: David Gresham
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+This Vignette written as an [R Markdown](http://rmarkdown.rstudio.com) Notebook provides a simple example of importing FACS data from different machines, annotating the samples and visualizing the results.
+
+The data are generated using the three FACS machines used in NYU CGSB gencore
+
+1. Accuri
+2. Aria
+3. Cytek
+
+# Example Data
+Below are the data that are used in this vignette.  To work through this analysis:  
+
+1. Download all directories and files from [here](https://drive.google.com/drive/folders/1_QARsH5vOHR-lIPURf3lgt6skN2of5US?usp=sharing)
+2. Organize directories with the following structure.
+
+You can see that there are three different directories `/Accuri` , `/Aria` and `/Cytek` that contain different .fcs files and samplesheets
+```{bash}
+echo '/Users/david/Projects/Data/flowdata'
+ls -R /Users/david/Projects/Data/flowdata 
+```
+
+# Load required libraries
+
+Several packages are required for running this analysis.  If they are not installed, you need to run the following commands the first time:
+
+## Install Libraries
+This workflow uses a variety of Bioconductor packages that should be loaded using: `BiocManager::install()` as per these [guidelines](https://www.bioconductor.org/install/).
+
+```{r Install libraries, warning=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install()
+#BiocManager::install(ncdfFlow)
+#BiocManager::install(flowCore)
+#BiocManager::install(flowViz)
+#BiocManager::install(ggcyto)
+#BiocManager::install(ggforce)
+
+
+#install.packages(tidyverse)
+#install.packages(ggridges)
+
+```
+
+## Loading the Gresham Lab's `flowtools` from [github](https://github.com/GreshamLab/flowtools)
+
+```{r}
+#install.packages(devtools)
+#devtools::install_github("greshamlab/flowtools")
+```
+
+## Load libraries
+This workflow using the following packages (include linkes to vignettes using packages)
+
+* [flowCore](https://www.bioconductor.org/packages/release/bioc/vignettes/flowCore/inst/doc/HowTo-flowCore.pdf), which provides several functions for reading and manipulating .fcs files.
+* [ncdfFlow](https://bioconductor.org/packages/devel/bioc/vignettes/ncdfFlow/inst/doc/ncdfFlow.pdf), which reads .fcs files to disk rather than memory.  This allows import of larger datasets as they do not need to be stored in memory.
+* [ggcyto](https://www.bioconductor.org/packages/release/bioc/html/ggcyto.html)
+    + [basic functions](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/Top_features_of_ggcyto.html)
+    + [autoplot](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/autoplot.html)
+    + [visualize flowset](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/ggcyto.flowSet.html)
+    + [visualize gatingset](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/ggcyto.GatingSet.html)
+
+```{r}
+library(ncdfFlow)
+library(flowCore)
+library(flowViz)
+library(ggcyto)
+library(ggforce)
+library(tidyverse)
+library(ggridges)
+library(readxl)
+```
+
+# Visualizing Accuri Data
+First we will visualize flow data from the Accuri
+
+## Read files
+FCS files exported from the Accuri flow cytometry machine are read into R using `read.ncdfFlowSet`
+```{r}
+dir = '/Users/david/Projects/Data/flowdata/Accuri'
+files <- sort(list.files(path=dir,pattern = ".fcs", full.names=TRUE))
+flowData <- read.ncdfFlowSet(files=files, pattern=".fcs", alter.names = TRUE)
+
+#needs to differ depending on sample sheet file typ
+#sample.sheet <- read_excel(paste(path=dir,"GAP1_multicheck_20May2019.xlsx", sep="/"))
+
+#print(flowData)
+#print(summary(flowData))
+flowData[[1]]
+```
+
+## Assign sample names and other metadata
+Information about the flowset is stored in an __AnnotatedDataFrame__.
+The dataframe
+```{r}
+#pData(flowData)
+#phenoData(flowData)
+#head(pData(flowData))
+#parameters(flowData))
+varLabels(flowData)
+colnames(flowData)
+sampleNames(flowData)
+keyword(flowData)
+#sampleNames(flowData)[1] <- 'Sample 1'
+#sampleNames(flowData)
+
+
+#phenoData(nc1)
+#pData(nc1)
+#varLabels(nc1)
+#varMetadata(nc1)
+#sampleNames(nc1)
+#keyword(nc1,"FILENAME")
+#identifier(nc1)
+#colnames(nc1)
+#colnames(nc1,prefix="s6a01")
+#length(nc1)
+#getIndices(nc1,"s6a01")
+```
+
+
+
+
