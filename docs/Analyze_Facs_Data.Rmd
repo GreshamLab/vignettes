@@ -40,18 +40,18 @@ Several packages are required for running this analysis.  If they are not instal
 This workflow uses a variety of Bioconductor packages that should be loaded using: `BiocManager::install()` as per these [guidelines](https://www.bioconductor.org/install/).
 
 ```{r Install libraries, warning=FALSE}
-#if (!requireNamespace("BiocManager", quietly = TRUE))
-#    install.packages("BiocManager")
-#BiocManager::install()
-#BiocManager::install(ncdfFlow)
-#BiocManager::install(flowCore)
-#BiocManager::install(flowViz)
-#BiocManager::install(ggcyto)
-#BiocManager::install(ggforce)
-
-
-#install.packages(tidyverse)
-#install.packages(ggridges)
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install()
+# BiocManager::install("ncdfFlow")
+# BiocManager::install("flowCore")
+# BiocManager::install("flowViz")
+# BiocManager::install("ggcyto")
+# BiocManager::install("ggforce")
+# 
+# 
+# install.packages("tidyverse")
+# install.packages("ggridges")
 
 ```
 
