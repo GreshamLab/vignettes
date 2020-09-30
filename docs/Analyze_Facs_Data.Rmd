@@ -121,6 +121,9 @@ pData(flowData)
 
 ```{r}
 fsApply(flowData,each_col,median)
+
+#data_summary <- as_tibble(fsApply(flowData,each_col,median))
+#names(data_summary)
 ```
 
 ## Visualization using the `ggcyto` package
@@ -132,7 +135,7 @@ fsApply(flowData,each_col,median)
 #### Ploting a single channel
 
 ```{r}
-autoplot(flowData, "FL1.A")
+autoplot(flowData, "FL1.A") 
 
 ```
 
@@ -157,7 +160,7 @@ p + geom_density()
 #### Using `ggridges`
 
 ```{r}
-p + geom_density_ridges(aes(y = Strain)) + facet_null() #facet_null is used to remove the default facet_wrap (by 'name' column)
+p + scale_x_logicle() + geom_density_ridges(aes(y = Strain)) + facet_null() #facet_null is used to remove the default facet_wrap (by 'name' column)
 ```
 
 #### 2D Scatter plots
