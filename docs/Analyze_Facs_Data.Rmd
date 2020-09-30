@@ -28,8 +28,8 @@ Below are the data that are used in this vignette.  To work through this analysi
 
 You can see that there are three different directories `/Accuri` , `/Aria` and `/Cytek` that contain different .fcs files and samplesheets
 ```{bash}
-echo '/Users/david/Projects/Data/flowdata'
-ls -R /Users/david/Projects/Data/flowdata 
+echo '../Data/flowdata'
+ls -R ../Data/flowdata 
 ```
 
 # Load required libraries
