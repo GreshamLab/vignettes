@@ -24,20 +24,29 @@ The data are generated using the three FACS machines used in NYU CGSB gencore
 Below are the data that are used in this vignette.  To work through this analysis:  
 
 1. Download all directories and files from [here](https://drive.google.com/drive/folders/1_QARsH5vOHR-lIPURf3lgt6skN2of5US?usp=sharing)
-2. Organize directories with the following structure.
+2. Create and organize a directory `../Data/flowdata` where the data for this vignette reside.
 
-You can see that there are three different directories `/Accuri` , `/Aria` and `/Cytek` that contain different .fcs files and samplesheets
+The dataset comprises three different directories with daat from three different machines:
+
+* `/Accuri` 
+* `/Aria`
+* `/Cytek`
+
+each directory contains 
+
+* `.fcs` files
+* a samplesheet
+
 ```{bash}
-echo '../Data/flowdata'
 ls -R ../Data/flowdata 
 ```
 
 # Load required libraries
 
-Several packages are required for running this analysis.  If they are not installed, you need to run the following commands the first time:
+Several packages are required for running this analysis.  If they are not installed, you need to run the following commands to install them the first time you run this vignette:
 
 ## Install Libraries
-This workflow uses a variety of Bioconductor packages that should be loaded using: `BiocManager::install()` as per these [guidelines](https://www.bioconductor.org/install/).
+This workflow uses a variety of Bioconductor packages that should be loaded using: `BiocManager::install()` as per these [guidelines](https://www.bioconductor.org/install/).  It also requires tidyverse, devtools, and ggridges.
 
 ```{r Install libraries, warning=FALSE}
 # if (!requireNamespace("BiocManager", quietly = TRUE))
@@ -48,22 +57,25 @@ This workflow uses a variety of Bioconductor packages that should be loaded usin
 # BiocManager::install("flowViz")
 # BiocManager::install("ggcyto")
 # BiocManager::install("ggforce")
-# 
-# 
+ 
+
 # install.packages("tidyverse")
 # install.packages("ggridges")
-
+# install.packages("devtools")
 ```
 
-## Loading the Gresham Lab's `flowtools` from [github](https://github.com/GreshamLab/flowtools)
+## Load the Gresham Lab's `flowtools` from [github](https://github.com/GreshamLab/flowtools)
+
+We have written a set of functions for inhouse flow cytometry analysis that are available in the package `flowtools`
 
 ```{r}
-#install.packages(devtools)
+#install.packages("devtools")
+library(devtools)
 #devtools::install_github("greshamlab/flowtools")
 ```
 
 ## Load libraries
-This workflow using the following packages (include linkes to vignettes using packages)
+This workflow using the following packages, which must be loaded to run this vignette:
 
 * [flowCore](https://www.bioconductor.org/packages/release/bioc/vignettes/flowCore/inst/doc/HowTo-flowCore.pdf), which provides several functions for reading and manipulating .fcs files.
 * [ncdfFlow](https://bioconductor.org/packages/devel/bioc/vignettes/ncdfFlow/inst/doc/ncdfFlow.pdf), which reads .fcs files to disk rather than memory.  This allows import of larger datasets as they do not need to be stored in memory.
@@ -85,12 +97,12 @@ library(readxl)
 ```
 
 # Working with Accuri Data
-First we will visualize flow data from the Accuri
+First we will visualize flow data from the Accuri flow cytometer.
 
 ## Read files
 FCS files exported from the Accuri flow cytometry machine are read into R using `read.ncdfFlowSet`
 ```{r}
-dir = '/Users/david/Projects/Data/flowdata/Accuri'
+dir = '/Users/David/Projects/Data/flowdata/Accuri'
 files <- sort(list.files(path=dir,pattern = ".fcs", full.names=TRUE))
 flowData <- read.ncdfFlowSet(files=files, pattern=".fcs", alter.names = TRUE)
 
@@ -98,9 +110,7 @@ flowData <- read.ncdfFlowSet(files=files, pattern=".fcs", alter.names = TRUE)
 #sample.sheet <- read_excel(paste(path=dir,"GAP1_multicheck_20May2019.xlsx", sep="/"))
 SampleSheet <- read_csv("~/Projects/Data/flowdata/Accuri/SampleSheet.csv")
 
-#print(flowData)
-#print(summary(flowData))
-flowData[[1]]
+flowData
 ```
 
 ## Assign sample names and other metadata
@@ -153,9 +163,7 @@ autoplot(flowData, "FSC.A", "FL1.A")
 #### Ploting a single channel
 ```{r}
 p <- ggcyto(flowData, aes(x = FL1.A))
-p + geom_density()
-   #    + geom_hex(bins = 128) 
-      # + geom_gate("CD8")
+p + geom_histogram() + scale_x_flowjo_biexp()
 ```
 #### Using `ggridges`
 
@@ -171,5 +179,11 @@ p + geom_hex(bins = 128)
 
 ```
 
+### Using ggplot
 
+
+```{r}
+ggplot(data = flowData, aes(x = FL1.A/FSC.A)) +
+  geom_histogram()
+```
 
