@@ -1,0 +1,260 @@
+---
+title: "Gate FACS data"
+author: "Gresham Lab"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_notebook:
+    toc: yes
+    fig_caption: yes
+    number_sections: yes
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+This Vignette written as an [R Markdown](http://rmarkdown.rstudio.com) Notebook provides an example of gating FACS data.
+
+The data used in this vignette were obtained from the three FACS machines used in NYU CGSB gencore
+
+1. Accuri
+2. Aria
+3. Cytek
+
+# Example Data
+Below are the data that are used in this vignette.  To work through this analysis:  
+
+1. Download all directories and files from [here](https://drive.google.com/drive/folders/1_QARsH5vOHR-lIPURf3lgt6skN2of5US?usp=sharing)
+2. Create and organize a directory `../Data/flowdata` where the data for this vignette reside.
+
+The dataset comprises three different directories with data from three different machines:
+
+* `/Accuri` 
+* `/Aria`
+* `/Cytek`
+
+each directory contains 
+
+* `.fcs` files
+* a samplesheet
+
+```{r}
+list.files("/Users/david/Projects/data/flowdata", recursive = T) 
+```
+
+# Load required libraries
+
+Several packages are required for running this analysis.  If they are not installed, you need to run the following commands to install them the first time you run this vignette:
+
+## Install Libraries
+This workflow uses a variety of Bioconductor packages that should be loaded using: `BiocManager::install()` as per these [guidelines](https://www.bioconductor.org/install/).  It also requires tidyverse, devtools, and ggridges.
+
+```{r Install libraries, warning=FALSE}
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#      install.packages("BiocManager")
+# BiocManager::install()
+# BiocManager::install("ncdfFlow")
+# BiocManager::install("flowCore")
+# BiocManager::install("flowViz")
+# BiocManager::install("ggcyto")
+# BiocManager::install("ggforce")
+# BiocManager::install("flowWorkspace")
+# BiocManager::install("openCyto")
+# BiocManager::install("flowStats")
+# 
+# install.packages("tidyverse")
+# install.packages("ggridges")
+# install.packages("devtools")
+```
+
+## Load the Gresham Lab's `flowtools` from [github](https://github.com/GreshamLab/flowtools)
+
+We have written a set of functions for inhouse flow cytometry analysis that are available in the package `flowtools`
+
+```{r}
+library(devtools)
+# devtools::install_github("greshamlab/flowtools")
+```
+
+## Load libraries
+This workflow using the following packages, which must be loaded to run this vignette:
+
+* [flowCore](https://www.bioconductor.org/packages/release/bioc/vignettes/flowCore/inst/doc/HowTo-flowCore.pdf), which provides several functions for reading and manipulating .fcs files.
+* [ncdfFlow](https://bioconductor.org/packages/devel/bioc/vignettes/ncdfFlow/inst/doc/ncdfFlow.pdf), which reads .fcs files to disk rather than memory.  This allows import of larger datasets as they do not need to be stored in memory.
+* [ggcyto](https://www.bioconductor.org/packages/release/bioc/html/ggcyto.html)
+    + [basic functions](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/Top_features_of_ggcyto.html)
+    + [autoplot](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/autoplot.html)
+    + [visualize flowset](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/ggcyto.flowSet.html)
+    + [visualize gatingset](https://www.bioconductor.org/packages/release/bioc/vignettes/ggcyto/inst/doc/ggcyto.GatingSet.html)
+
+```{r}
+library(ncdfFlow)
+library(flowCore)
+library(flowViz)
+library(ggcyto)
+library(ggforce)
+library(tidyverse)
+library(ggridges)
+library(readxl)
+library(flowWorkspace)
+library(openCyto)
+library(flowStats)
+```
+
+# Working with Accuri Data
+First we will visualize flow data from the Accuri flow cytometer.
+
+## Read files
+FCS files exported from the Accuri flow cytometry machine are read into R using `read.ncdfFlowSet`
+```{r}
+
+#read.flow.data() <- function{}
+
+dir = '/Users/david/Projects/data/flowdata/Accuri'
+files <- sort(list.files(path=dir,pattern = ".fcs", full.names=TRUE))
+flowData <- read.ncdfFlowSet(files=files, pattern=".fcs", alter.names = TRUE)
+
+#needs to differ depending on sample sheet file typ
+#sample.sheet <- read_excel(paste(path=dir,"GAP1_multicheck_20May2019.xlsx", sep="/"))
+SampleSheet <- read_csv("~/Projects/Data/flowdata/Accuri/SampleSheet.csv")
+
+flowData
+```
+
+## Assign sample names and other metadata
+Information about the flowset is stored in an __AnnotatedDataFrame__.
+The dataframe
+```{r}
+#annotate.flow.data <- function{}
+
+sampleNames(flowData) <- SampleSheet$Strain
+
+pData(flowData)$Well <- SampleSheet$Well
+pData(flowData)$Strain <- SampleSheet$Strain
+pData(flowData)$Genotype <- SampleSheet$Genotype
+pData(flowData)$Ploidy <- SampleSheet$Ploidy
+pData(flowData)$Media <- SampleSheet$Media
+pData(flowData)
+
+```
+## View a summary of the data
+
+```{r}
+fsApply(flowData,each_col,median)
+
+#data_summary <- as_tibble(fsApply(flowData,each_col,median))
+#names(data_summary)
+```
+
+## Constructing a gate
+
+To perform gating, we use the [openCyto](http://opencyto.org/) package
+
+### Gating doublets and small cells
+
+#### Gating for singlets
+
+```{r}
+frame <- flowData[[1]]
+sg <- gate_singlet(frame, area = "FSC.A", height = "FSC.H")
+autoplot(frame, "FSC.A", "FSC.H", filter = sg)
+```
+
+
+
+## Visualization using the `ggcyto` package
+
+### Using Autoplot
+
+`autoplot()` is a simple function that provides quick plots of the data with minimal control on the appearance of the plot
+
+#### Ploting a single channel
+
+```{r}
+autoplot(flowData, "FL1.A") 
+
+```
+
+#### Plotting two channels
+
+```{r}
+autoplot(flowData, "FSC.A", "FL1.A")
+```
+
+### Using the `ggcyto` function
+
+`ggcyto` provides more control over the plot
+
+
+#### Ploting a single channel
+```{r}
+p <- ggcyto(flowData, aes(x = FL1.A))
+p + geom_histogram() + scale_x_flowjo_biexp()
+```
+#### Using `ggridges`
+
+```{r}
+p + scale_x_logicle() + geom_density_ridges(aes(y = Strain)) + facet_null() #facet_null is used to remove the default facet_wrap (by 'name' column)
+```
+
+#### 2D Scatter plots
+
+```{r}
+p <- ggcyto(flowData, aes(x = `FSC.A`, y =  `FL1.A`))
+p + geom_hex(bins = 128)
+
+```
+
+### Using ggplot
+
+
+```{r}
+ggplot(data = flowData, aes(x = FL1.A/FSC.A)) +
+  geom_histogram()
+```
+
+# Working with Cytek Data
+Finally, we will visualize flow data from the Cytek flow cytometer.
+
+## Read files
+FCS files exported from the Cytek flow cytometry machine are read into R using `read.ncdfFlowSet`
+```{r}
+dir = '/Users/david/Projects/data/flowdata/Cytek'
+files <- sort(list.files(path=dir,pattern = ".fcs", full.names=TRUE))
+CytekflowData <- read.ncdfFlowSet(files=files, pattern=".fcs", alter.names = TRUE)
+
+#needs to differ depending on sample sheet file typ
+#sample.sheet <- read_excel(paste(path=dir,"GAP1_multicheck_20May2019.xlsx", sep="/"))
+CytekSampleSheet <- read_csv("~/Projects/Data/flowdata/Cytek/SampleSheet.csv")
+
+CytekflowData
+```
+
+
+## Assign sample names and other metadata
+Information about the flowset is stored in an __AnnotatedDataFrame__.
+The dataframe
+```{r}
+sampleNames(CytekflowData) <- CytekSampleSheet$Strain
+
+pData(CytekflowData)$Well <- CytekSampleSheet$Well
+pData(CytekflowData)$Strain <- CytekSampleSheet$Strain
+pData(CytekflowData)$mCitrine <- CytekSampleSheet$mCitrine_copies
+pData(CytekflowData)$mCherry <- CytekSampleSheet$mCherry_copies
+```
+
+
+#### Plotting two channels
+
+```{r}
+autoplot(CytekflowData, "FSC.A", "V1.A")
+```
+
+
+## View a summary of the data
+
+```{r}
+fsApply(CytekflowData,each_col,median)
+
+#data_summary <- as_tibble(fsApply(flowData,each_col,median))
+#names(data_summary)
+```
