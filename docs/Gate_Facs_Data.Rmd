@@ -145,9 +145,36 @@ fsApply(flowData,each_col,median)
 #names(data_summary)
 ```
 
-## Constructing a gate
+## Constructing gates
 
 To perform gating, we use the [openCyto](http://opencyto.org/) package
+
+### Gating debris
+
+The first step is to gate out debris from our sample.  This is performed by plotting forward scatter versus side scatter 
+
+```{r}
+#gating_set <- GatingSet(flowData)
+#gating_set
+quartz()
+
+plot(flowData[[1]], c('FSC.A','SSC.A'), xlim=c(0,3e6), ylim=c(0,1e6),smooth=T)
+#autoplot(flowData[[1]], c('FSC.A','SSC.A'), xlim=c(0,3e6), ylim=c(0,1e6),smooth=T)
+debris.gate <- locator(100, type='l', col='red')
+gm.2 <- matrix(,length(debris.gate$x),2)
+colnames(gm.2) <- c('FSC.A','SSC.A')
+gm.2[,1] <- debris.gate$x
+gm.2[,2] <- debris.gate$y
+pg.nondebris <- polygonGate(filterId="nonDebris",.gate=gm.2)
+
+#Look at the gating on the controls
+ggcyto(flowData.singlets[c(neg.signal,pos.signal,hi.signal)], aes(x = `FSC.A`, y =  `SSC.A`)) + geom_hex(bins = 512) + ggcyt
+
+```
+
+
+
+
 
 ### Gating doublets and small cells
 
