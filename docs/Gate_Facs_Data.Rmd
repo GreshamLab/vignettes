@@ -98,6 +98,13 @@ library(readxl)
 library(flowWorkspace)
 library(openCyto)
 library(flowStats)
+
+library(devtools)
+library(tidyverse)
+
+# Load required packages
+library(CytoExploreR)
+library(CytoExploreRData)
 ```
 
 # Working with Accuri Data
@@ -145,7 +152,54 @@ fsApply(flowData,each_col,median)
 #names(data_summary)
 ```
 
+<<<<<<< HEAD
 ## Constructing gates
+=======
+## GATING USING CYTOEXPLORER
+
+## Create a gating set
+This seems to work below.
+```{r}
+gs <- cyto_setup(path="/Users/david/Projects/data/flowdata/Accuri",
+                 select="fcs")
+
+
+##########
+#gate_flow_data <- GatingSet(flowData)
+gate_flow_data <- cyto_transform(gs)
+cyto_gate_draw(gate_flow_data,
+               gatingTemplate = "Manual-Gating1.csv",
+               parent = "root",
+               alias = "Cells",
+               channels = c("FSC-A", "SSC-A"))
+
+
+cyto_gate_draw(gate_flow_data,
+               gatingTemplate = "Manual-Gating.csv",
+               parent = "Cells",
+               alias = "Single Cells",
+               channels = c("FSC-A", "FSC-H"))
+
+cyto_gate_draw(gate_flow_data,
+               gatingTemplate = "Manual-Gating.csv",
+               parent = "Single Cells",
+               alias = "One Copy GFP",
+               channels = c("FSC-A", "FL1-A"))
+
+
+```
+
+
+
+
+
+
+
+##########################################################3
+
+
+## Constructing a gate
+>>>>>>> cd44ac58a164b66850c350f5cb81a5bbec22b4d5
 
 To perform gating, we use the [openCyto](http://opencyto.org/) package
 
