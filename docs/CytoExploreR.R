@@ -74,14 +74,20 @@ transformed_accuri <- cyto_transform(accuri_gating_set,
 
 #####Gating cells.
 #To gate cells we use the interactive function of Cytoexplorer
-#The details of the gating are maintained in a .cvs file, which must be called
+#The details of the gating are recorded in a .cvs file, which must be specified in the function
 #The gating is done in a hierarchical manner, so that there is a parent and a child for each gate.
-#By calling the entire gating set all cells from all fcs files are plotted
-#individual files can be called as well
+
+#Cytoexplorer will merge the entire set of fcs files and plot them when gating is performed.  As a result it is not possible to distinguish the different samples.
+#However, there are two ways that individual samples can be used for the purpose of gating as described below.
+
+#Below I describe three different ways to gate the data using the gating set.
+
+#1.  Gating using the entire set of experimental data.
+#This is the default behavior when the gating set is called.
 
 #The first gate defines cells based on forward scatter and side scatter
 #For this gate we use all the cells
-cyto_gate_draw(transformed_accuri,
+cyto_gate_draw(transformed_accuri,  #entire gating set is plotted for gating purposes.  It is downsamples to 25,000 events for
                parent = "root",
                alias = "Cells",
                channels = c("FSC-A","SSC-A"),
