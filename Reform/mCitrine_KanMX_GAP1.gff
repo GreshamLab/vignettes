@@ -1,0 +1,6 @@
+XI	mCitrine_KanMX	promoter	1	988	.	+	.	prACT1
+XI	mCitrine_KanMX	CDS	989	1705	.	+	.	ymCitrineM233I
+XI	mCitrine_KanMX	terminator	1706	1942	.	+	.	ADH1 terminator
+XI	mCitrine_KanMX	promoter	1943	2331	.	+	.	pTEF promoter
+XI	mCitrine_KanMX	gene	2332	3141	.	+	.	KanMX
+XI	mCitrine_KanMX	misc_feature	3142	3375	.	+	.	pTEF promoter terminator (partial)

@@ -1,0 +1,6 @@
+prACT1                            ,1..988    ,988,==,promoter    
+ymCitrineM233I                    ,989..1705 ,717,=>,CDS         
+ADH1 terminator                   ,1706..1942,237,==,terminator  
+pTEF promoter                     ,1943..2331,389,==,promoter    
+KanMX                             ,2332..3141,810,=>,gene        
+pTEF promoter terminator (partial),3142..3375,234,==,misc_feature
