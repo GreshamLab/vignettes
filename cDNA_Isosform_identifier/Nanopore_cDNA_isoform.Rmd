@@ -1,0 +1,132 @@
+---
+title: "cDNA Isoform calling for Nanopore"
+author: "Pieter Spealman"
+date: "10/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Getting started
+
+This document assumes you've already ran a sample an ONT Nanopore device and have generated fast5 files recording the squiggles of that run. 
+
+It assumes you've previously performed base-calling on the fast5 and the resultant fastq files are on the HPC. 
+
+It assumes that you have a base conda environment and have activated it. Because of how snakemake is handling the environment creation at runtime I have found **the only way to get seaborn to work is to install it using pip.**  
+```
+pip install seaborn
+```
+
+## Step 1. Install by git
+```
+git clone https://github.com/nanoporetech/pipeline-nanopore-ref-isoforms.git
+cd pipeline-nanopore-ref-isoforms
+```
+
+### Step 2. Edit the config.yml file.
+**note: this pipeline is largely under- or undocumented, so changing these settings can have unexpected results**
+
+```
+nano config.yml
+```
+
+* workdir_top
+  + This will be your output folder
+  + Despite inline comment, this works best if it is not the absolute path
+  ```
+  # ABSOLUTE path to directory holding the working directory:
+  workdir_top: "HEK_test"
+  ```
+* genome_fasta
+  ```
+  # Input genome
+  genome_fasta: "Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+  ```
+* existing_annotation
+  + works best if it is a GFF not GTF
+  ```
+  existing_annotation: "Homo_sapiens.GRCh38.104.gff3"
+  ```
+* reads_fastq 
+  + Path to folder <FASTQ/PASS> or file <sample.fastq>
+  + if this points to a file change 'concatenate' to 'false' 
+  ```
+  # cDNA or direct RNA reads in fastq format
+  reads_fastq: "/scratch/cgsb/gresham/LABSHARE/Data/nanopore/HEK_CPA/Hek_CPA_pilot/FASTQ/pass"
+  ```
+* concatenate 
+  + if <FASTQ/PASS> directory was already combined
+  ```
+  # The path above is a directory, find and concatenate fastq files:
+  concatenate: true
+  ```
+* run_pychopper
+  + **NB This must be set to false**
+  + pychopper runs an HMM to identify adapters and cut them out, reads lacking adapters will be discarded
+  + our sequences no longer have adapters leading to a massive loss of data
+  ```
+  # Process cDNA reads using pychopper, turn off for direct RNA:
+  run_pychopper: false
+  ```
+* plot_gffcmp_stats 
+  + Potentially usefull, set to False by default
+  ```
+  # Plot gffcompare results:
+  plot_gffcmp_stats: true
+  ```
+
+### Step 3 Edit sbatch
+**NB Syntax Error** - At time of writing the syntax used in this pipeline was incompatible with the syntax expected in the latest version of snakemake [here](https://github.com/nanoporetech/pipeline-nanopore-ref-isoforms/issues/18). Here we are using a "safe" version - but this may break if ONT updates the pipeline syntax.
+```
+nano filename.sh
+```
+copy and paste: 
+```{}
+#!/bin/bash
+#
+#SBATCH --verbose
+#SBATCH --job-name=cDNA_isoform_calling
+#SBATCH --output=isoform_%j.out
+#SBATCH --error=isoform_%j.err
+#SBATCH --time=24:00:00
+#SBATCH --nodes=1
+#SBATCH --mem=20GB
+#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT
+
+#module load
+module load snakemake/5.31.1
+
+snakemake --use-conda -j 4 all
+
+```
+Then run using
+```
+sbatch <filename.sh>
+```
+
+**NB - Restarting**
+  + If an error occurs in the pipeline, the previously completed steps will be retained and merely restarting the run will be sufficient to restart where the you had previously left off. To restart entirely either delete the output folder <workdir_top> or change <workdir_top> parameter in the config.yml file 
+
+### Step 4 Evaluate results
+* cDNA Isoform identification and comparison to reference:
+  + located in 
+  ```
+  pipeline-nanopore-ref-isoforms/results/gffcompare/str_merged.annotated.gtf
+  ```
+  This file defines which "gene" each isoform is assigned to (eg. "gene_name").
+
+  This file also describes each transcript with a "class code" such as "=" or "y". The exact nature of these is described on the gffcompare page [here](http://ccb.jhu.edu/software/stringtie/gffcompare_codes.png)
+
+  **NB - Unstranded data and isoform classes** 
+  Because this is unstranded cDNA information the stranded isoform classes 's' and 'x' should not be considered as "novel".
+
+* cDNA Isoform coverage data:
+  + located in 
+  ```
+  pipeline-nanopore-ref-isoforms/results/gffcompare/str_merged.gff
+  ```
+  This file contains read depth information for each transcript, Total coverage ("cov"), FPKM, and TPM.
+  
