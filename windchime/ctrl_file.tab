@@ -1,0 +1,50 @@
+#data_type	variable	value
+meta	set_name	Project_CAlbicans_Yujia_HK7CCDRXY
+meta	data_dir	/scratch/cgsb/gencore/out/Gresham/2021-10-25_HK7CCDRXY/merged/
+meta	work_dir	/scratch/cgsb/gresham/LABSHARE/Data/HK7CCDRXY/
+meta	output_dir	/scratch/cgsb/gresham/LABSHARE/Data/HK7CCDRXY/results/
+meta	genome_fa	/scratch/cgsb/gresham/pieter/genome/Candida_albicans_sc5314/C_albicans_SC5314_A22_current_chromosomes.fasta
+meta	genome_features	/scratch/cgsb/gresham/pieter/genome/Candida_albicans_sc5314/C_albicans_SC5314_A22_current_features.gff
+meta	intron_max	500
+meta	adapter_seq_R1	AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+meta	adapter_seq_R2	AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+meta	prefix	HK7CCDRXY
+meta	fastq_name_template	{prefix}_n01_{strain}
+meta	qc_locus	Ca22chrRA_C_albicans_SC5314:1891108-1896912
+sample	CAWT1_C-LIM_2H
+sample	CAWT1_C-LIM_5H
+sample	CAWT1_C-LIM_8H
+sample	CAWT1_C-LIM_11H
+sample	CAWT1_C-LIM_24H
+sample	CAWT1_C-LIM_48H
+sample	CAWT1_C-LIM_72H
+sample	CAWT1_N-LIM_2H
+sample	CAWT1_N-LIM_5H
+sample	CAWT1_N-LIM_8H
+sample	CAWT1_N-LIM_11H
+sample	CAWT1_N-LIM_24H
+sample	CAWT1_N-LIM_48H
+sample	CAWT1_N-LIM-72H
+sample	CAWT1_YPD_2H
+sample	CAWT1_YPD_5H
+sample	CAWT1_YPD_8H
+sample	CAWT1_YPD_11H
+sample	CAWT1_YPD_24H
+sample	CAWT1_YPD_48H
+sample	CAWT1_YPD_72H
+
+
+Here's an idea: In addition to the Adaptive nanopore sequencing we also focus on the impacts of Gabriel's 
+Summer Undergraduate Research Program (SURP), which (if I understand correctly) does the field sample collections.
+
+How summer collection of materials with SURP participants Impacts you : 
+1) Terrestrial/Soil field work experience 
+2) Field experiment design 
+3) Undergraduate research assistant experience
+
+How summer collection of materials with SURP participants Impacts others : 
+1) Undergraduate exposure to field research.
+2) Development of undergraduate appropriate experimental methods.
+3) Collection of samples at a very large scale.
+4) Potentially you could do metal analysis on the sediments collected too - this could be a new method you would bring to the summer program
+
