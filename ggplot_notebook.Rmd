@@ -1,0 +1,464 @@
+---
+title: "ggplot"
+author: "David Gresham"
+date: Last compiled on `r Sys.Date()`
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+    toc: yes
+---
+
+This document was created for a workshop I ran at NYU in 2018.  It contains explanations and examples of using `ggplot2()` to generate plots using tidy data in R. 
+
+## ggplot is part of the _tidyverse()_ package
+
+```{r echo=TRUE, message=TRUE, warning=TRUE}
+#install.packages("tidyverse")
+library(tidyverse)
+```
+
+## ggplot
+
+### the grammar of graphics
+
+- __data__  the data you want to plot
+- __aesthetics__ how the data is mapped
+- __geometries__ vizualization of the data
+- __stats__ representations of data that aid understanding
+- __coordinates__ space on which data is plotted
+- __facets__ how plots are subsetted
+- __themes__ non-data aspects of plots
+
+## ggplot
+
+### topics
+
+- basic plotting
+- scale adjustments
+- position adjustment
+- zooming
+- facetting
+- labels
+- themes
+
+## ggplot
+
+### the basic syntax
+
+```
+ggplot(data = <DATA>, mapping = aes(<Mapping>)) +
+        <GEOM_FUNCTION>()
+```
+
+## ggplot constraints
+
+- data must be in a dataframe
+- data should be in _tidy_ format
+    + each variable must have its own column
+    + each observation must have its own row
+    + each value must have its own cell
+
+- for gene expression data this means one row per gene per experiment
+    + not one row per gene
+
+## example dataset (modified yeast gff file)
+
+```{r, include=FALSE}
+gff <- read_delim("Saccharomyces_cerevisiae.R64-1-1.34.gff3", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    comment = "#", trim_ws = TRUE, skip = 24)
+names(gff) <- c("chromosome", 
+                "source", 
+                "feature", 
+                "start",
+                "stop", 
+                "unknown1",
+                "strand",
+                "unknown2",
+                "info"
+                )
+#correct data types
+gff$feature = as.factor(gff$feature)
+gff$chromosome = as.factor(gff$chromosome)
+gff$strand = as.factor(gff$strand)
+
+yeast_features <- gff %>%
+        select(chromosome, feature, start, stop, strand) %>%
+        mutate(length = abs(start - stop)) %>%
+        filter(feature == "CDS" | feature == "rRNA" | feature == "snoRNA" | feature == "snRNA" | feature == "tRNA_gene")
+```
+
+
+```{r, echo=FALSE}
+head(yeast_features)
+```
+
+## feature and chromosome are factors
+
+```{r, echo=TRUE}
+levels(yeast_features$feature)
+levels(yeast_features$chromosome)
+```
+
+## view structure using str() 
+
+```{r echo=TRUE}
+str(yeast_features)
+```
+
+
+## histogram of feature lengths {.smallcode}    
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length)) +
+        geom_histogram()
+```
+
+## plot as a continuous distribution
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length)) +
+        geom_freqpoly()
+```
+
+## color according to feature type
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length)) +
+        geom_freqpoly(mapping = aes(color = feature))
+```
+
+## Plot as a probability density
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..,color = feature)) +
+        geom_freqpoly()
+```
+
+## Plot all data using geom_point
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+        geom_point(aes(color = feature))
+```
+
+## Dealing with overplotting using jitter
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+        geom_point(aes(color = feature), position = "jitter")
+```
+
+## Dealing with overplotting using alpha
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+        geom_jitter(aes(color = feature), alpha = 1/10)
+```
+
+## Boxplots using geom_boxplot()
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+        geom_boxplot()
+```
+
+## Mapping aesthetics within layers
+
+```{r, echo=TRUE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length, color = feature)) +
+        geom_boxplot()
+```
+
+## Combining layers
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+        geom_boxplot() + 
+        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature))
+```
+
+## Modifying scales
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+        geom_boxplot() + 
+        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature)) +
+        scale_y_log10()
+
+```
+
+## Changing the order using reorder
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = reorder(chromosome, length, FUN = median), y = length)) +
+        geom_boxplot() + 
+        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature)) +
+        scale_y_log10()
+
+```
+
+## Flipping coordinates {.smaller}
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = reorder(chromosome, length, FUN = median), y = length)) +
+        geom_boxplot() + 
+        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature)) +
+        scale_y_log10() +
+        coord_flip()
+
+```
+
+## Barplots
+With one categorical datatype (factor): chromosome
+
+```{r, echo=TRUE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = chromosome)) +
+        geom_bar()
+```
+
+## Barplots
+two categorical datatypes/factors: chromosome & features
+
+```{r, echo=TRUE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+        geom_bar()
+```
+
+## Barplot variant: fill
+
+```{r, echo=TRUE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+        geom_bar(position = "fill")
+```
+
+## Barplot variant: dodge
+
+```{r, echo=TRUE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+        geom_bar(position = "dodge")
+```
+
+## Computing and ploting statistics
+
+```{r, echo=TRUE}
+ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
+        stat_summary(fun.data = mean_sdl)
+```
+
+
+
+## Facetting plots
+
+```{r, echo=TRUE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, fill = chromosome)) +
+        geom_histogram() + 
+        facet_wrap( ~ chromosome) 
+```
+
+## Facetting (grid)
+```{r, echo=TRUE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
+        geom_histogram() + 
+        facet_wrap(feature ~ strand, nrow = 2) 
+```
+
+## Scatter plots
+
+```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
+        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
+        scale_x_log10() + 
+        scale_y_log10()
+```
+
+## Statistics: adding trend line
+
+```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
+        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
+        scale_x_log10() + 
+        scale_y_log10() + 
+        geom_smooth()
+```
+
+## Statistics: controlling trend line
+
+```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
+        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
+        scale_x_log10() + 
+        scale_y_log10() + 
+        geom_smooth(method = "lm")
+```
+
+## Colors (setting color)
+
+```{r, echo=TRUE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, fill = chromosome)) +
+        geom_histogram(fill = "red") + 
+        scale_x_log10() +
+        facet_wrap( ~ chromosome) 
+```
+
+## Zooming in with coord_cartesian()
+
+```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
+        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
+        scale_x_log10() + 
+        scale_y_log10() + 
+        geom_smooth() +
+        coord_cartesian(xlim = c(10,5000), ylim = c(10,5000))
+```
+
+## Adding Labels to plots
+```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
+        geom_freqpoly(mapping = aes(color = feature)) +
+        scale_x_log10() +
+        labs(
+                title = "Distribution of feature sizes",
+                x = "length (base pairs)",
+                y = "probability density"
+        ) + 
+        theme(legend.position = "bottom")
+```
+
+## Themes change the overall look
+
+```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
+        geom_freqpoly(mapping = aes(color = feature)) +
+        scale_x_log10() +
+        labs(
+                title = "Distribution of feature sizes",
+                x = "length (base pairs)",
+                y = "probability density"
+        ) + 
+        theme(legend.position = "bottom") + 
+        theme_light()
+```
+
+## Themes
+
+more themes available in add-on package __ggthemes__
+
+```{r}
+#install.packages("ggthemes")
+library(ggthemes)
+```
+
+## Additional themes : theme_tufte()
+
+```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
+        geom_freqpoly(mapping = aes(color = feature)) +
+        scale_x_log10() +
+        theme_tufte()
+```
+
+## Additional themes : theme_excel()
+Don't do this!
+
+```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
+        geom_freqpoly(mapping = aes(color = feature)) +
+        scale_x_log10() +
+        theme_excel()
+```
+
+
+## Generic plot function
+
+```
+ggplot(data = <DATA>, mapping = aes(<Mapping>)) +
+        <GEOM_FUNCTION>() + 
+        <STAT_FUNCTYION>() +
+        <FACET_FUNCTION>() + 
+        <SCALE_FUNCTION>() +
+        <THEME_FUNCTION>()
+        
+```
+
+## Concise code
+code can be made concise excluding some definitions
+
+```{r echo=TRUE, fig.height=3.5, fig.width=6}
+ggplot(yeast_features, aes(length, ..density..)) +
+        geom_freqpoly(aes(color = feature)) +
+        scale_x_log10() +
+        theme(legend.position = "bottom") + 
+        theme_light()
+```
+
+## Saving plots as variables
+
+```{r, echo=TRUE}
+my_plot <- ggplot(yeast_features, aes(length, ..density..)) +
+        geom_freqpoly(aes(color = feature)) +
+        scale_x_log10() +
+        labs(
+                title = "Distribution of feature sizes",
+                x = "length (base pairs)",
+                y = "probability density"
+        ) + 
+        theme(legend.position = "bottom") + 
+        theme_light()
+```
+
+## Adding to plot variables
+
+```{r, echo=TRUE}
+my_plot + geom_hline(yintercept = 2, color = "red")
+```
+
+## Exercise 1
+Add: 1. new axis labels, 2. title, 3. trend line, and 4. change theme to tufte_theme
+
+```{r fig.height=4, fig.width=4}
+ggplot(data = a, aes(x = x, y = y, color = Class))+
+        geom_point(size = 3)
+```
+
+## Read in and modify gff
+
+```{r echo=TRUE}
+gff <- read_delim("Saccharomyces_cerevisiae.R64-1-1.34.gff3", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    comment = "#", trim_ws = TRUE, skip = 24)
+names(gff) <- c("chromosome", 
+                "source", 
+                "feature", 
+                "start",
+                "stop", 
+                "unknown1",
+                "strand",
+                "unknown2",
+                "info"
+                )
+#correct data types
+gff$feature = as.factor(gff$feature)
+gff$chromosome = as.factor(gff$chromosome)
+gff$strand = as.factor(gff$strand)
+
+yeast_features <- gff %>%
+        select(chromosome, feature, start, stop, strand) %>%
+        mutate(length = abs(start - stop)) %>%
+        filter(feature == "CDS" | feature == "rRNA" | feature == "snoRNA" | feature == "snRNA" | feature == "tRNA_gene")
+```
+
+## Exercise 2
+Plot as barplots with error bars
+```{r echo=TRUE, fig.height=4, fig.width=4}
+ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
+        stat_summary(fun.data = mean_sdl)
+```
+
+## Exercise 3
+Change bin size for histogram
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length)) +
+        geom_histogram()
+```

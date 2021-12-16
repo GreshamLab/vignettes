@@ -1,0 +1,525 @@
+---
+title: "tidyverse"
+author: "David Gresham"
+date: Last compiled on "`r Sys.Date()`"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+    toc: yes
+---
+
+This document was created for a workshop I ran at NYU on using tidyverse in 2018.  It contains explanations and examples of creating tidy data and using functions in `dplyr()` to manipulate data. 
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Outline
+
+* tidy data
+* reading data
+* verbs in dplyr()
+    + `select()`
+    + `mutate()`
+    + `arrange()`
+    + `summarise()`
+    + `filter()`
+* the pipe `%>%`
+* joining files
+
+##Load packages
+
+```{r, echo = T}
+library(tidyverse)
+library(stringr)
+```
+
+## Tidy data
+* each __variable__ is saved in its on __column__
+* each __observation__ is saved in its own __row__
+* each __value__ must have its own __cell__
+
+```{r echo=FALSE, fig.width=6, fig.asp = 0.618, out.width = "70%", fig.align = "center", warning=FALSE}
+knitr::include_graphics("./images/tidy-1.png")
+```
+
+## Is this table tidy?
+No.
+```{r}
+table2
+```
+
+## Is this table tidy?
+No.
+```{r}
+table3
+```
+
+## Is this table tidy?
+Yes!
+```{r}
+table1
+```
+
+## Is this table tidy?
+No.
+```{r include=FALSE}
+gene_expression <- tibble(
+        Gene = c("ACT1", "GAP1", "MEP2", "DUR3", "MSN2", "DAL80"),
+        t0 = c(2.2, 4.3, 1.6, -1.2, -2.0, 0.2),
+        t1 = c(3.2, 2.1, 0.8, -1.8, -0.8, 0.6),
+        t2 = c(4.5, 1.6, 0.4, -1.8, -0.1, 0.9)
+)
+
+```
+
+```{r}
+gene_expression
+```
+
+## Is this table tidy?
+No.
+```{r include=FALSE}
+facs_data <- tibble(
+        Sample = c("A1", "A1", "A2", "A2", "A3", "A3"),
+        Measure = c("FSC", "FL1", "FSC", "FL1", "FSC", "FL1"),
+        Value = c(3.6, 4.5, 3.5, 3.2, 3.8, 4.2)
+)
+
+```
+
+```{r}
+facs_data
+```
+
+## what are tidy data?
+
+Jeff Leek in his book __The Elements of Data Analytic Style__ summarizes the characteristics of tidy data as the points:
+
+* Each variable you measure should be in one column.
+* Each different observation of that variable should be in a different row.
+* There should be one table for each "kind" of variable.
+* If you have multiple tables, they should include a column in the table that allows them to be linked.
+
+[https://en.wikipedia.org/wiki/Tidy_data]: https://en.wikipedia.org/wiki/Tidy_data
+
+
+## gather()
+used when column names are not names of variables, but _values_ of a variable (e.g. time).
+makes tables _longer_ and _skinny_ (previously known as melting)
+```{r}
+gene_expression
+```
+
+
+## gather()
+used when column names are not names of variables, but _values_ of a variable (e.g. time).
+makes tables _longer_ and _skinny_ (previously known as melting)
+```{r}
+gather(gene_expression, t0:t2, key = "timepoint", value = "expression")
+```
+
+## spread()
+Spreading is the opposite of gathering.  Used when an observation is scattered across multiple rows.
+`spread()` makes tables _shorter_ and _wider_
+```{r}
+facs_data
+```
+
+## spread()
+Spreading is the opposite of gathering.  Used when an observation is scattered across multiple rows.
+`spread()` makes tables _shorter_ and _wider_
+```{r}
+spread(facs_data, key = Measure, value = Value)
+```
+
+## Exercise 1
+put table2 in tidy format
+```{r}
+table2[1:6,] #truncated so it fits on slide
+```
+
+```{r}
+spread(table2, key = type, value = count)
+```
+
+## Exercise 2
+convert table1 to table2
+```{r}
+table1
+```
+
+```{r}
+head(table2)
+```
+
+
+```{r}
+gather(table1, c(country, year, cases, population), key = "year", value = "count")
+```
+
+
+## data import
+`readr()` has numerous functions for reading in files as tibbles
+
++ `read_csv()` for comma-delimited
++ `read_tsv()` for tab-delimited
++ `read_delim()` in which you specify the delimiter
+
+Read in the annotation file for the yeast genome.
+```{r data}
+gff <- read_delim("Saccharomyces_cerevisiae.R64-1-1.34.gff3", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    comment = "#", trim_ws = TRUE, skip = 24)
+```
+
+## Take a look at data
+
+a tibble is a dataframe
+
+```{r}
+head(gff)
+```
+
+## Look at data structure with str()
+```{r}
+str(gff)
+```
+
+## Look at the data the tidyverse way
+### using glimpse()
+
+```{r}
+glimpse(gff)
+```
+
+## Assign meaningful names to columns
+same approach as naming dataframe columns in base R
+```{r}
+names(gff) <- c("chromosome", 
+                "source", 
+                "feature", 
+                "start",
+                "stop", 
+                "unknown1",
+                "strand",
+                "unknown2",
+                "info"
+                )
+```
+
+## Dataframe now has meaningful names
+note that tidyverse tries to guess data type
+```{r}
+glimpse(gff)
+```
+
+## assign columns proper datatypes
+assigning correct data type is critical for analyses and plotting with ggplot()
+```{r}
+gff$feature = as.factor(gff$feature)
+gff$chromosome = as.factor(gff$chromosome)
+gff$strand = as.factor(gff$strand)
+glimpse(gff)
+```
+
+## Select columns using `select()`
+```{r}
+gff <- select(gff, c("chromosome", "feature", "start", "stop", "strand"))
+head(gff)
+```
+
+## Add a column with `mutate()`
+```{r}
+gff <- mutate(gff, length = abs(start - stop))
+head(gff)
+```
+
+## Sort tibble by column with `arrange()`
+Note that writing `dplyr::arrange` specifies the package and function if there is an overlay with functions in other packages or in base R. 
+```{r}
+dplyr::arrange(gff,length)
+```
+
+## Sort by feature size with arrange()
+sort largest to smallest using `-`
+```{r}
+dplyr::arrange(gff,-length)
+```
+
+## Analyze with `summarize()`
+this creates a new tibble/dataframe 
+```{r}
+summarise(gff, mean = mean(length), 
+               sd = sd(length), 
+               min = min(length), 
+               max = max(length)
+          )
+```
+
+## Analyze with `summarize()`
+the function `n()` counts how many observations their are
+```{r}
+summarise(gff, mean = mean(length), 
+               sd = sd(length), 
+               min = min(length), 
+               max = max(length), 
+               n = n())
+```
+
+## using the pipe: `%>%`
++ the pipe is from the `magittr` package
++ same as `|` in unix
++ allows you to perform multiple sequential functions
++ pronounced __then__
++ unleashes the true power of tidyverse functions
+
+
+## Subset data with `group_by()`
+```{r}
+gff %>%
+mutate(length = abs(start - stop)) %>%
+group_by(feature) %>%
+summarise(mean = mean(length), sd = sd(length), min = min(length), max = max(length), n = n())
+```
+
+## Filter rows with `filter()`
+```{r}
+gff %>%
+filter(feature != "mRNA" & feature != "rRNA_gene" & feature != "snoRNA_gene"& feature != "snRNA_gene") %>%
+mutate(length = abs(start - stop)) %>%
+group_by(feature) %>%
+summarise(mean = mean(length), sd = sd(length), min = min(length), max = max(length), n = n()) 
+```
+
+## Pass dataframe to ggplot for plotting
+__NOTE: ggplot uses `+` not the pipe `%>%`__
+```{r, fig.height=2, fig.width=2}
+gff %>%
+filter(feature == c("CDS")) %>%
+ggplot(aes(x = length)) + 
+        geom_histogram(bins = 100)
+```
+
+## Exercise 3
+plot the population of each country in 1999 using `%>% and  `ggplot()`
+```{r}
+table1
+```
+
+## Exercise 3
+```{r}
+table1 %>%
+        select(-cases) %>%
+        filter(year == "1999") %>%
+        ggplot(mapping = aes(x = country, fill = country, y = population)) +
+        geom_bar(stat="identity")
+```
+
+
+## String manipulation with `stringr()`
+How do we get the gene names?
+```{r, warning=FALSE, include=FALSE}
+gff <- read_delim("Saccharomyces_cerevisiae.R64-1-1.34.gff3", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    comment = "#", trim_ws = TRUE, skip = 24)
+
+names(gff) <- c("chromosome", 
+                "source", 
+                "feature", 
+                "start",
+                "stop", 
+                "unknown1",
+                "strand",
+                "unknown2",
+                "info"
+                )
+
+gff$feature = as.factor(gff$feature)
+gff$chromosome = as.factor(gff$chromosome)
+gff$strand = as.factor(gff$strand)
+```
+
+```{r}
+select(gff, info)
+```
+
+
+## Separate values in column with `separate()` {.smaller}
+```{r, warning=FALSE}
+gff %>%
+mutate(length = abs(start - stop)) %>%
+filter(feature == "gene") %>%
+separate(col = "info", into = c("info1", "info2", "info3", "info4", "info5"), sep = ";", extra = "merge") %>%
+separate(col = "info1", into = c("junk", "Systematic_name"), sep = ":") %>%
+separate(col = "info2", into = c("junk2", "Gene"), sep = "Name=") %>%
+separate(col = "info3", into = c("junk3", "Description1"), sep = "description=") %>%  
+separate(col = "info4", into = c("junk4", "Description2"), sep = "description=") %>%
+select(c(Description1, Description2))
+```
+
+## Combine columns with `unite()` {.smaller}
+```{r, warning=FALSE}
+gff %>%
+mutate(length = abs(start - stop)) %>%
+filter(feature == "gene") %>%
+separate(col = "info", into = c("info1", "info2", "info3", "info4", "info5"), sep = ";", extra = "merge") %>%
+separate(col = "info1", into = c("junk", "Systematic_name"), sep = ":") %>%
+separate(col = "info2", into = c("junk2", "Gene"), sep = "Name=") %>%
+separate(col = "info3", into = c("junk3", "Description1"), sep = "description=") %>%  
+separate(col = "info4", into = c("junk4", "Description2"), sep = "description=") %>%    
+unite(Description, Description1, Description2, sep = ":") %>%
+select(c(Description))
+```
+
+## Save to a new variable {.smaller}
+A general rule is if you are piping more than 10 steps save as a new variable
+```{r, warning=FALSE}
+gff_clean <- gff %>%
+mutate(length = abs(start - stop)) %>%
+filter(feature == "gene") %>%
+separate(col = "info", into = c("info1", "info2", "info3", "info4", "info5"), sep = ";", extra = "merge") %>%
+separate(col = "info1", into = c("junk", "Systematic_name"), sep = ":") %>%
+separate(col = "info2", into = c("junk2", "Gene"), sep = "Name=") %>%
+separate(col = "info3", into = c("junk3", "Description1"), sep = "description=") %>%  
+separate(col = "info4", into = c("junk4", "Description2"), sep = "description=") %>%    
+unite(Description, Description1, Description2, sep = "") %>%
+select(c(Systematic_name, Gene, Description))
+```
+
+## Clean up strings with `stringr()` {.smaller}
+```{r, warning=FALSE}
+gff_clean$Description <- str_replace_all(gff_clean$Description, "%3B", "")
+gff_clean$Description <- str_replace_all(gff_clean$Description, "%2C", "")
+gff_clean$Description <- str_replace_all(gff_clean$Description, "^NA", "")
+
+gff_clean %>%
+select(c(Description))
+
+```
+
+## Write file
+```{r}
+write_tsv(gff_clean, "Yeast_genes.txt", na = "NA")
+```
+
+
+## How do we combine tables?
+
+### Mutating joins
+A mutating join allows you combine variables from two tables by matchiung observations by their keys
+
+#### 1. Inner Join
+matches pairs of observation from two tables whenever their keys are equal
+
+#### 2. Outer join
+keeps observations that appear in at least one of the tables
+
++ left join keeps all the observations in x (should be the default)
++ right join keeps all the observations in y
++ full join keeps all observations in x and y
+
+### 3. Filtering joins
+affects (filters) the observations not the variables
+
++ semi_join(x, y) keeps all observations in x that have a match in y
++ anti_join(x, y) drops all observations in x that have a match in y
+
+## Dataset must contain common values (gene names) {.smaller}
+```{r warning=FALSE, include=FALSE}
+data <-  read_delim("Neymotin_Table_S1.txt", 
+    "\t", escape_double = FALSE, col_names = TRUE, 
+    comment = "#", trim_ws = TRUE)
+```
+
+```{r}
+str(data)
+```
+
+## File to join with
+```{r}
+str(gff_clean)
+```
+
+## Joining data
+`dplyr::left_join(a, b, by = "x1")`
+Join matching rows from b to a.
+
+```{r}
+left_join(gff_clean, data, by = c("Systematic_name" = "Syst")) %>%
+        str()
+```
+
+## Exercise 4
+
+tidy data don't allow easy correlation plots, so we need to rearrage the data
+
+```{r}
+tidy_gene_expression <- gene_expression %>%
+        gather(t0:t2, key = "timepoint", value = "expression")
+tidy_gene_expression
+```
+
+## Rearrange the data 
+
+```{r echo=FALSE}
+tidy_gene_expression %>%
+        spread(key = timepoint, value = expression)
+```
+
+## Plot correlation between t0 and t1
+
+```{r echo=FALSE}
+tidy_gene_expression %>%
+        spread(key = timepoint, value = expression) %>%
+        ggplot(aes(x = t0, y = t1)) + 
+        geom_point()
+```
+
+## Exercise 5
+
++ Get the gff file for your favorite organism
++ Tidy the gff
++ plot distribution of features per chromosome
+
+
+```{r include=FALSE}
+gff <- read_delim("Saccharomyces_cerevisiae.R64-1-1.34.gff3", 
+    "\t", escape_double = FALSE, col_names = FALSE, 
+    comment = "#", trim_ws = TRUE, skip = 24)
+names(gff) <- c("chromosome", 
+                "source", 
+                "feature", 
+                "start",
+                "stop", 
+                "unknown1",
+                "strand",
+                "unknown2",
+                "info"
+                )
+#correct data types
+gff$feature = as.factor(gff$feature)
+gff$chromosome = as.factor(gff$chromosome)
+gff$strand = as.factor(gff$strand)
+
+yeast_features <- gff %>%
+        select(chromosome, feature, start, stop, strand) %>%
+        mutate(length = abs(start - stop)) %>%
+        filter(feature == "CDS" | feature == "rRNA" | feature == "snoRNA" | feature == "snRNA" | feature == "tRNA_gene")
+```
+
+## Example
+
+```{r, fig.width=6, fig.asp = 0.618, out.width = "70%", fig.align = "center"}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+        geom_bar(position = "dodge")
+```
+
+
+
+## Resources
+
+* Base R to tidyverse  http://www.significantdigits.org/2017/10/switching-from-base-r-to-tidyverse/
+* Cheatsheet: https://www.rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf
+
