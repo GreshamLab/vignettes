@@ -1,0 +1,97 @@
+Well,Sample,Bio_rep,Tech_rep,Species
+A1,Scerevisiae_YPD,1,1,Saccharomyces cerevisae
+A2,Scerevisiae_YPD,1,2,Saccharomyces cerevisae
+A3,Scerevisiae_YPD,1,3,Saccharomyces cerevisae
+A4,Scerevisiae_YPD,2,1,Saccharomyces cerevisae
+A5,Scerevisiae_YPD,2,2,Saccharomyces cerevisae
+A6,Scerevisiae_YPD,2,3,Saccharomyces cerevisae
+A7,Scerevisiae_GlnLim,1,1,Saccharomyces cerevisae
+A8,Scerevisiae_GlnLim,1,2,Saccharomyces cerevisae
+A9,Scerevisiae_GlnLim,1,3,Saccharomyces cerevisae
+A10,Scerevisiae_GlnLim,2,1,Saccharomyces cerevisae
+A11,Scerevisiae_GlnLim,2,2,Saccharomyces cerevisae
+A12,Scerevisiae_GlnLim,2,3,Saccharomyces cerevisae
+B1,Scerevisiae_YPD,3,1,Saccharomyces cerevisae
+B2,Scerevisiae_YPD,3,2,Saccharomyces cerevisae
+B3,Scerevisiae_YPD,3,3,Saccharomyces cerevisae
+B4,Scerevisiae_YPD,4,1,Saccharomyces cerevisae
+B5,Scerevisiae_YPD,4,2,Saccharomyces cerevisae
+B6,Scerevisiae_YPD,4,3,Saccharomyces cerevisae
+B7,Scerevisiae_GlnLim,3,1,Saccharomyces cerevisae
+B8,Scerevisiae_GlnLim,3,2,Saccharomyces cerevisae
+B9,Scerevisiae_GlnLim,3,3,Saccharomyces cerevisae
+B10,Scerevisiae_GlnLim,4,1,Saccharomyces cerevisae
+B11,Scerevisiae_GlnLim,4,2,Saccharomyces cerevisae
+B12,Scerevisiae_GlnLim,4,3,Saccharomyces cerevisae
+C1,Scerevisiae_YPD,5,1,Saccharomyces cerevisae
+C2,Scerevisiae_YPD,5,2,Saccharomyces cerevisae
+C3,Scerevisiae_YPD,5,3,Saccharomyces cerevisae
+C4,Scerevisiae_YPD,6,1,Saccharomyces cerevisae
+C5,Scerevisiae_YPD,6,2,Saccharomyces cerevisae
+C6,Scerevisiae_YPD,6,3,Saccharomyces cerevisae
+C7,Scerevisiae_GlnLim,5,1,Saccharomyces cerevisae
+C8,Scerevisiae_GlnLim,5,2,Saccharomyces cerevisae
+C9,Scerevisiae_GlnLim,5,3,Saccharomyces cerevisae
+C10,Scerevisiae_GlnLim,6,1,Saccharomyces cerevisae
+C11,Scerevisiae_GlnLim,6,2,Saccharomyces cerevisae
+C12,Scerevisiae_GlnLim,6,3,Saccharomyces cerevisae
+D1,B,NA,NA,NA
+D2,B,NA,NA,NA
+D3,B,NA,NA,NA
+D4,B,NA,NA,NA
+D5,B,NA,NA,NA
+D6,B,NA,NA,NA
+D7,B,NA,NA,NA
+D8,B,NA,NA,NA
+D9,B,NA,NA,NA
+D10,B,NA,NA,NA
+D11,B,NA,NA,NA
+D12,B,NA,NA,NA
+E1,B,NA,NA,NA
+E2,B,NA,NA,NA
+E3,B,NA,NA,NA
+E4,B,NA,NA,NA
+E5,B,NA,NA,NA
+E6,B,NA,NA,NA
+E7,B,NA,NA,NA
+E8,B,NA,NA,NA
+E9,B,NA,NA,NA
+E10,B,NA,NA,NA
+E11,B,NA,NA,NA
+E12,B,NA,NA,NA
+F1,Calbicans_YPD,1,1,Candida albicans
+F2,Calbicans_YPD,1,2,Candida albicans
+F3,Calbicans_YPD,1,3,Candida albicans
+F4,Calbicans_YPD,2,1,Candida albicans
+F5,Calbicans_YPD,2,2,Candida albicans
+F6,Calbicans_YPD,2,3,Candida albicans
+F7,Calbicans_GlnLim,1,1,Candida albicans
+F8,Calbicans_GlnLim,1,2,Candida albicans
+F9,Calbicans_GlnLim,1,3,Candida albicans
+F10,Calbicans_GlnLim,2,1,Candida albicans
+F11,Calbicans_GlnLim,2,2,Candida albicans
+F12,Calbicans_GlnLim,2,3,Candida albicans
+G1,Calbicans_YPD,3,1,Candida albicans
+G2,Calbicans_YPD,3,2,Candida albicans
+G3,Calbicans_YPD,3,3,Candida albicans
+G4,Calbicans_YPD,4,1,Candida albicans
+G5,Calbicans_YPD,4,2,Candida albicans
+G6,Calbicans_YPD,4,3,Candida albicans
+G7,Calbicans_GlnLim,3,1,Candida albicans
+G8,Calbicans_GlnLim,3,2,Candida albicans
+G9,Calbicans_GlnLim,3,3,Candida albicans
+G10,Calbicans_GlnLim,4,1,Candida albicans
+G11,Calbicans_GlnLim,4,2,Candida albicans
+G12,Calbicans_GlnLim,4,3,Candida albicans
+H1,Calbicans_YPD,5,1,Candida albicans
+H2,Calbicans_YPD,5,2,Candida albicans
+H3,Calbicans_YPD,5,3,Candida albicans
+H4,Calbicans_YPD,6,1,Candida albicans
+H5,Calbicans_YPD,6,2,Candida albicans
+H6,Calbicans_YPD,6,3,Candida albicans
+H7,Calbicans_GlnLim,5,1,Candida albicans
+H8,Calbicans_GlnLim,5,2,Candida albicans
+H9,Calbicans_GlnLim,5,3,Candida albicans
+H10,Calbicans_GlnLim,6,1,Candida albicans
+H11,Calbicans_GlnLim,6,2,Candida albicans
+H12,Calbicans_GlnLim,6,3,Candida albicans
