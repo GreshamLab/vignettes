@@ -337,11 +337,7 @@ Enriched terms are connected when their gene sets overlap. Functionally related 
 
 ```{r emapplot, fig.width=10, fig.height=8}
 pairwise_go_enrich <- pairwise_termsim(go_enrich)
-emapplot(pairwise_go_enrich,
-         layout.params = list(layout = "star"),
-         showCategory  = 25,
-         cex.params    = list(category_label = 0.6),
-         shadowtext    = TRUE)
+emapplot(pairwise_go_enrich, showCategory = 25)
 ```
 
 #### Category netplot — genes linked to enriched terms
@@ -350,7 +346,6 @@ Shows which individual genes drive each enriched term, and highlights genes belo
 
 ```{r cnetplot, fig.width=12, fig.height=8}
 cnetplot(go_enrich,
-         categorySize = "pvalue",
          color.params = list(foldChange = gene_list))
 ```
 
