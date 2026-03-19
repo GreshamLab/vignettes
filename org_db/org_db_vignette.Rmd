@@ -345,8 +345,7 @@ emapplot(pairwise_go_enrich, showCategory = 25)
 Shows which individual genes drive each enriched term, and highlights genes belonging to multiple categories.
 
 ```{r cnetplot, fig.width=12, fig.height=8}
-cnetplot(go_enrich,
-         color.params = list(foldChange = gene_list))
+cnetplot(go_enrich, foldChange = gene_list)
 ```
 
 #### Word cloud — term frequency by gene ratio
