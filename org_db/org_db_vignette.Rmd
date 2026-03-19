@@ -66,18 +66,18 @@ GO_data <- read_tsv("../data/gene_association.cgd",
                     col_names = FALSE, comment = "!")
 ```
 
-The two files share gene symbols (e.g., AAF1) — `Gene Names (primary)` in UniProt and `V3` in the GO file. We join on these, then extract the 9-character CGD locus ID (e.g., `C3_06470W`) from column `V11` of the GO file, which lists gene synonyms as a pipe-separated string. IDs that do not match the *C. albicans* SC5314 locus format (two characters + underscore) belong to other *Candida* species in the file and are removed.
+The two files share gene symbols (e.g., AAF1) — `Gene Names (primary)` in UniProt and `X3` in the GO file. We join on these, then extract the 9-character CGD locus ID (e.g., `C3_06470W`) from column `X11` of the GO file, which lists gene synonyms as a pipe-separated string. IDs that do not match the *C. albicans* SC5314 locus format (two characters + underscore) belong to other *Candida* species in the file and are removed.
 
 ```{r merge-data}
 # Inner join: keep only genes present in both files
 merged_data <- inner_join(uniprot, GO_data,
-                          by = c("Gene Names (primary)" = "V3"))
+                          by = c("Gene Names (primary)" = "X3"))
 
-# Extract the 9-character locus ID from the synonyms column (V11)
-# V11 is a pipe-separated list; the C. albicans locus ID is the entry of the form C#_#####N
+# Extract the 9-character locus ID from the synonyms column (X11)
+# X11 is a pipe-separated list; the C. albicans locus ID is the entry of the form C#_#####N
 merged_data <- merged_data |>
     mutate(
-        gene = substr(V11, 1, 9),
+        gene = substr(X11, 1, 9),
         # Locus IDs for C. albicans SC5314 have an underscore at position 3 (e.g., C3_06470W)
         # IDs from other Candida species do not; set those to NA and remove
         gene = if_else(grepl("^.{2}[^_]", gene), NA_character_, gene)
@@ -134,13 +134,13 @@ head(candidaChr)
 
 #### GO data frame
 
-In GAF format, column `V5` is the GO term and `V7` is the evidence code.
+In GAF format, column `X5` is the GO term and `X7` is the evidence code.
 
 ```{r go-df}
 candidaGO <- merged_data |>
     select(GID      = gene,
-           GO       = V5,
-           EVIDENCE = V7) |>
+           GO       = X5,
+           EVIDENCE = X7) |>
     filter(!is.na(GO), !is.na(EVIDENCE)) |>
     distinct()
 
