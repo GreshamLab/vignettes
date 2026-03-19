@@ -10,7 +10,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(eval = FALSE)  # all chunks require external data; set eval=TRUE to run
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 ```
 
 ## Introduction
@@ -20,8 +20,8 @@ An **OrgDB** (Organism Annotation Database) is a Bioconductor object that stores
 This vignette demonstrates how to:
 
 1. Build a custom OrgDB for *Candida albicans* using `AnnotationForge`, by merging data from UniProt and the Candida Genome Database (CGD)
-2. Run a GO overrepresentation analysis on DESeq2 results using the custom OrgDB and `clusterProfiler`
-3. Build an OrgDB for organisms where UniProt already provides GO annotations (illustrated with *Mustela putorius*)
+2. Build an OrgDB for organisms where UniProt already provides GO annotations (illustrated with *Mustela putorius*)
+3. Run a GO overrepresentation analysis on DESeq2 results using the custom OrgDB and `clusterProfiler`
 
 ## Required packages
 
@@ -35,7 +35,7 @@ BiocManager::install(c("AnnotationForge", "clusterProfiler", "enrichplot"))
 install.packages("wordcloud")
 ```
 
-```{r libraries, message=FALSE, warning=FALSE}
+```{r libraries}
 library(tidyverse)
 library(AnnotationForge)
 library(clusterProfiler)
@@ -57,29 +57,29 @@ library(wordcloud)
 ### Reading and merging the data
 
 ```{r read-data}
-# Read the UniProt TSV export
-uniprot <- read_tsv("uniprotkb_candida_albicans_2024_07_16.tsv",
+# Read the UniProt TSV export (header row present)
+uniprot <- read_tsv("../data/uniprotkb_candida_albicans_2024_07_16.tsv",
                     comment = "!")
 
-# Read the CGD GO annotation file (GAF format; no header, '!' comment lines)
-GO_data <- read_tsv("gene_association.cgd",
+# Read the CGD GO annotation file (GAF 2.0 format; no header, '!' comment lines)
+GO_data <- read_tsv("../data/gene_association.cgd",
                     col_names = FALSE, comment = "!")
 ```
 
-The two files share gene symbols (e.g., GAP1) — `Gene.Names..primary.` in UniProt and `V3` in the GO file. We merge on these, then extract the 9-character CGD locus ID (e.g., `C1_00010W`) from column V11 of the GO file. IDs that don't match the expected format belong to other *Candida* strains and are removed.
+The two files share gene symbols (e.g., AAF1) — `Gene Names (primary)` in UniProt and `V3` in the GO file. We join on these, then extract the 9-character CGD locus ID (e.g., `C3_06470W`) from column `V11` of the GO file, which lists gene synonyms as a pipe-separated string. IDs that do not match the *C. albicans* SC5314 locus format (two characters + underscore) belong to other *Candida* species in the file and are removed.
 
 ```{r merge-data}
-# Merge on shared gene symbol
-merged_data <- merge(uniprot, GO_data,
-                     by.x = "Gene.Names..primary.",
-                     by.y = "V3")
+# Inner join: keep only genes present in both files
+merged_data <- inner_join(uniprot, GO_data,
+                          by = c("Gene Names (primary)" = "V3"))
 
-# Extract the 9-character locus ID from the GO data gene ID column (V11)
-# CGD locus IDs follow the pattern: two letters, underscore, five digits, letter (e.g. C1_00010W)
+# Extract the 9-character locus ID from the synonyms column (V11)
+# V11 is a pipe-separated list; the C. albicans locus ID is the entry of the form C#_#####N
 merged_data <- merged_data |>
     mutate(
         gene = substr(V11, 1, 9),
-        # IDs that don't start with two chars + underscore belong to other strains — set to NA
+        # Locus IDs for C. albicans SC5314 have an underscore at position 3 (e.g., C3_06470W)
+        # IDs from other Candida species do not; set those to NA and remove
         gene = if_else(grepl("^.{2}[^_]", gene), NA_character_, gene)
     ) |>
     filter(!is.na(gene))
@@ -87,7 +87,7 @@ merged_data <- merged_data |>
 
 ### Preparing the three required data frames
 
-`makeOrgPackage()` expects three data frames, each containing a `GID` column as the primary key:
+`makeOrgPackage()` expects three data frames, each with a `GID` column as the primary key:
 
 - **candidaSym** — `GID`, `SYMBOL`, `GENENAME`
 - **candidaChr** — `GID`, `CHROMOSOME`
@@ -95,61 +95,63 @@ merged_data <- merged_data |>
 
 #### SYMBOL data frame
 
+`SYMBOL` is the short gene name (e.g., AAF1); `GENENAME` is the full protein name from UniProt. Long protein names are truncated to the first five words with any parenthetical text removed.
+
 ```{r sym-df}
-# Select GID, primary gene symbol, and protein name columns by name
-# Adjust column names if your UniProt export differs
 candidaSym <- merged_data |>
-    select(GID = gene,
-           SYMBOL = `Gene.Names..primary.`,
-           GENENAME = `Protein.names`) |>
+    select(GID      = gene,
+           SYMBOL   = `Gene Names (primary)`,
+           GENENAME = `Protein names`) |>
     filter(!is.na(SYMBOL), !is.na(GENENAME)) |>
-    distinct(SYMBOL, .keep_all = TRUE) |>
+    distinct(SYMBOL,   .keep_all = TRUE) |>
     distinct(GENENAME, .keep_all = TRUE) |>
     mutate(
-        # Truncate long protein names: keep first 5 words, drop parenthetical text
         GENENAME = sapply(strsplit(GENENAME, " "), function(x) {
             first_five <- paste(x[seq_len(min(5, length(x)))], collapse = " ")
             gsub("\\(.*", "", first_five)
         })
     )
+
+head(candidaSym)
 ```
 
 #### CHROMOSOME data frame
 
-*C. albicans* has 8 chromosomes (7 autosomal + R chromosome). The chromosome number is encoded in the locus ID (second character).
+*C. albicans* has 8 chromosomes (7 autosomal + R). The chromosome number is the second character of the locus ID (e.g., `C3_06470W` → chromosome 3).
 
 ```{r chr-df}
-# Select GID and chromosome info; extract chromosome number from locus ID
 candidaChr <- merged_data |>
-    select(GID = gene, CHROMOSOME = V19) |>   # adjust V19 if column differs
-    filter(!is.na(CHROMOSOME)) |>
+    select(GID = gene) |>
     mutate(
-        # Extract chromosome: second character of locus ID
-        CHROMOSOME = substr(CHROMOSOME, 2, 2),
-        # Keep only valid chromosome labels (digits and R); set others to NA
+        CHROMOSOME = substr(GID, 2, 2),
         CHROMOSOME = if_else(grepl("[0-9R]", CHROMOSOME), CHROMOSOME, NA_character_)
     ) |>
     filter(!is.na(CHROMOSOME)) |>
     distinct()
+
+head(candidaChr)
 ```
 
 #### GO data frame
 
+In GAF format, column `V5` is the GO term and `V7` is the evidence code.
+
 ```{r go-df}
-# Select GID, GO term, and evidence code columns
 candidaGO <- merged_data |>
-    select(GID = gene,
-           GO = V5,          # GO term column in GAF format
-           EVIDENCE = V7) |> # evidence code column in GAF format
+    select(GID      = gene,
+           GO       = V5,
+           EVIDENCE = V7) |>
     filter(!is.na(GO), !is.na(EVIDENCE)) |>
     distinct()
+
+head(candidaGO)
 ```
 
 ### Creating and installing the OrgDB package
 
-> **Important:** `makeOrgPackage()` creates a new directory in your working directory. It will error if that directory already exists, so **run this chunk only once**. After running it, set `eval=FALSE` on this chunk or comment out the `makeOrgPackage()` call.
+> **Important:** `makeOrgPackage()` creates a new package directory in your working directory. It will throw an error if that directory already exists. **Run the `makeOrgPackage()` call only once**, then comment it out. The `install.packages()` call below it should be run every time on a new machine.
 
-```{r make-orgdb}
+```{r make-orgdb, eval=FALSE}
 # Run ONCE — comment out makeOrgPackage() after the first run
 makeOrgPackage(
     gene_info  = candidaSym,
@@ -165,171 +167,45 @@ makeOrgPackage(
     goTable    = "go"
 )
 
-# Install the generated package from source — run every time on a new machine
+# Install the generated package from source
 install.packages("./org.Calbicans.eg.db", type = "source", repos = NULL)
 ```
 
 ```{r load-orgdb}
 library(org.Calbicans.eg.db)
 
-# Verify the package loaded correctly
+# Verify available key types
 columns(org.Calbicans.eg.db)
-keytypes(org.Calbicans.eg.db)
-```
-
----
-
-## Part 2: GO overrepresentation analysis with clusterProfiler
-
-This section uses the *C. albicans* OrgDB built above to run a GO overrepresentation analysis on DESeq2 differential expression results.
-
-### Reading DESeq2 results
-
-```{r read-deseq}
-# Read DESeq2 output — expects columns: Locus, log2FoldChange, padj
-df <- read_csv("data/time_72_vs_2_results.csv")
-```
-
-### Preparing the gene lists
-
-`enrichGO()` requires two inputs:
-- **`gene`** — the genes of interest (e.g., significant DEGs)
-- **`universe`** — all tested genes (the background set)
-
-```{r prep-genes}
-# Universe: all tested genes, named by locus ID, sorted by log2FC (required by clusterProfiler)
-gene_list <- df |>
-    filter(!is.na(log2FoldChange)) |>
-    arrange(desc(log2FoldChange)) |>
-    pull(log2FoldChange, name = Locus)
-
-# Gene set of interest: significant DEGs with |log2FC| > 2
-genes <- df |>
-    filter(padj < 0.05, abs(log2FoldChange) > 2, !is.na(log2FoldChange)) |>
-    pull(Locus)
-```
-
-### Creating the enrichGO object
-
-The `ont` parameter selects the GO sub-ontology:
-
-- `"BP"` — Biological Process
-- `"MF"` — Molecular Function
-- `"CC"` — Cellular Component
-- `"ALL"` — all three (results include an `ONTOLOGY` column)
-
-The `keyType` must match an available key type in your OrgDB. Check with `keytypes(org.Calbicans.eg.db)`.
-
-```{r enrich-go}
-go_enrich <- enrichGO(
-    gene          = genes,
-    universe      = names(gene_list),
-    OrgDb         = org.Calbicans.eg.db,
-    keyType       = "GID",
-    readable      = TRUE,
-    ont           = "ALL",
-    pvalueCutoff  = 0.05,
-    qvalueCutoff  = 0.2
-)
-```
-
-### Visualizing results
-
-#### Results table
-
-```{r results-table}
-head(go_enrich)
-```
-
-#### Barplot — top enriched terms by gene count
-
-```{r barplot, fig.width=8, fig.height=5}
-barplot(go_enrich,
-        showCategory = 10,
-        title = "GO Enrichment",
-        font.size = 8)
-```
-
-#### Dotplot — enrichment score vs gene ratio
-
-```{r dotplot, fig.width=8, fig.height=6}
-dotplot(go_enrich)
-```
-
-#### Upset plot — gene overlap across enriched terms
-
-```{r upsetplot, fig.width=18, fig.height=12}
-upsetplot(go_enrich)
-```
-
-#### Enrichment map — network of overlapping gene sets
-
-Enriched terms are connected when their associated gene sets overlap. Functionally related terms cluster together, making it easy to identify broader biological themes.
-
-```{r emapplot, fig.width=10, fig.height=8}
-pairwise_go_enrich <- pairwise_termsim(go_enrich)
-emapplot(pairwise_go_enrich,
-         layout.params  = list(layout = "star"),
-         showCategory   = 25,
-         cex.params     = list(category_label = 0.6),
-         shadowtext      = TRUE)
-```
-
-#### Category netplot — genes linked to enriched terms
-
-The cnetplot shows which individual genes drive each enriched term, and highlights genes that belong to multiple categories.
-
-```{r cnetplot, fig.width=12, fig.height=8}
-cnetplot(go_enrich,
-         categorySize = "pvalue",
-         color.params = list(foldChange = gene_list))
-```
-
-#### Word cloud — term frequency by gene ratio
-
-```{r wordcloud, fig.width=14, fig.height=12}
-wc_df <- data.frame(
-    term  = go_enrich$Description,
-    freq  = as.integer(gsub("/.*", "", go_enrich$GeneRatio))
-)
-wordcloud(words  = wc_df$term,
-          freq   = wc_df$freq,
-          scale  = c(4, 0.1),
-          colors = brewer.pal(8, "Dark2"),
-          max.words = 25)
 ```
 
 ---
 
 ## Alternative: OrgDB when UniProt provides GO annotations
 
-For organisms where UniProt already includes GO term associations, you can skip the CGD GO file. You still need chromosome information and GO evidence codes. In this example we use *Mustela putorius* (ferret), sourcing data from UniProt, NCBI, and QuickGO.
+For organisms where UniProt already includes GO term associations, you can skip the separate GO database file. You still need chromosome information (from NCBI) and GO evidence codes (from QuickGO). This example uses *Mustela putorius* (ferret, taxonomy ID 9669).
+
+> **Note:** The data files for this section are organism-specific and not included in the repository. Download them as described below before running these chunks.
 
 **Data sources:**
-- **UniProt** — search by taxonomy ID 9669; export Entry, Gene Names, Protein names, Gene Ontology IDs
+- **UniProt** — search by taxonomy ID 9669; export Entry, Gene Names, Protein names, Gene Ontology IDs as TSV
 - **NCBI** — download gene table including chromosome information
 - **QuickGO** — download GO evidence codes filtered by organism
 
-```{r weasel-read}
+```{r weasel-read, eval=FALSE}
 mi_uniprot <- read_tsv("uniprotkb_taxonomy_id_9669_2024_10_01.tsv", comment = "!")
 mi_ncbi    <- read_tsv("mustela_putorius_furo_ncbi.tsv",             comment = "!")
-mi_quickGO <- read_tsv("QuickGO-annotations.tsv",                    comment = "!")
-
-# Create a composite key for joining GO evidence codes
-mi_quickGO <- mi_quickGO |>
+mi_quickGO <- read_tsv("QuickGO-annotations.tsv",                    comment = "!") |>
     mutate(GeneGO = paste0(`GENE PRODUCT ID`, "_", `GO TERM`))
 ```
 
-```{r weasel-sym}
-# SYMBOL data frame
+```{r weasel-sym, eval=FALSE}
 miSym <- mi_uniprot |>
     select(GID = Entry, SYMBOL = `Gene Names`, GENENAME = `Protein names`) |>
     filter(SYMBOL != "", GENENAME != "") |>
     distinct()
 ```
 
-```{r weasel-chr}
-# CHROMOSOME data frame
+```{r weasel-chr, eval=FALSE}
 miChr <- mi_ncbi |>
     select(GID = Symbol, CHROMOSOME = Chromosome) |>
     filter(GID != "") |>
@@ -337,9 +213,8 @@ miChr <- mi_ncbi |>
     distinct()
 ```
 
-```{r weasel-go}
-# GO data frame: UniProt stores multiple GO IDs per row, separated by "; "
-# pivot to one row per gene-GO pair, then join evidence codes from QuickGO
+```{r weasel-go, eval=FALSE}
+# UniProt stores multiple GO IDs per row, separated by "; " — pivot to one row per gene-GO pair
 miGO_long <- mi_uniprot |>
     select(GID = Entry, GO = `Gene Ontology IDs`) |>
     filter(GO != "") |>
@@ -353,7 +228,7 @@ miGO_long <- mi_uniprot |>
     distinct()
 ```
 
-```{r weasel-orgdb}
+```{r weasel-orgdb, eval=FALSE}
 # Run ONCE — comment out makeOrgPackage() after the first run
 makeOrgPackage(
     gene_info  = miSym,
@@ -370,13 +245,127 @@ makeOrgPackage(
 )
 
 install.packages("./org.MputoriusNew.eg.db", repos = NULL, type = "source")
-```
-
-```{r weasel-load}
 library(org.MputoriusNew.eg.db)
 
 columns(org.MputoriusNew.eg.db)
 keytypes(org.MputoriusNew.eg.db)
+```
+
+---
+
+## Part 2: GO overrepresentation analysis with clusterProfiler
+
+This section uses the *C. albicans* OrgDB built in Part 1 to run a GO overrepresentation analysis on DESeq2 differential expression results.
+
+### Reading DESeq2 results
+
+```{r read-deseq}
+# DESeq2 output — columns: Locus, log2FoldChange, padj
+df <- read_csv("../data/time_72_vs_2_results.csv")
+glimpse(df)
+```
+
+### Preparing the gene lists
+
+`enrichGO()` requires two inputs:
+
+- **`gene`** — the genes of interest (significant DEGs)
+- **`universe`** — all tested genes (the background set)
+
+```{r prep-genes}
+# Universe: all tested genes, named vector of log2FC sorted in decreasing order
+gene_list <- df |>
+    filter(!is.na(log2FoldChange)) |>
+    arrange(desc(log2FoldChange)) |>
+    pull(log2FoldChange, name = Locus)
+
+# Gene set of interest: significant DEGs with |log2FC| > 2
+genes <- df |>
+    filter(padj < 0.05, abs(log2FoldChange) > 2, !is.na(log2FoldChange)) |>
+    pull(Locus)
+
+cat("Universe size:", length(gene_list), "\n")
+cat("Gene set size:", length(genes), "\n")
+```
+
+### Creating the enrichGO object
+
+The `ont` parameter selects the GO sub-ontology: `"BP"` (Biological Process), `"MF"` (Molecular Function), `"CC"` (Cellular Component), or `"ALL"`. The `keyType` must match an available key type in your OrgDB — check with `keytypes(org.Calbicans.eg.db)`.
+
+```{r enrich-go}
+go_enrich <- enrichGO(
+    gene         = genes,
+    universe     = names(gene_list),
+    OrgDb        = org.Calbicans.eg.db,
+    keyType      = "GID",
+    readable     = TRUE,
+    ont          = "ALL",
+    pvalueCutoff = 0.05,
+    qvalueCutoff = 0.2
+)
+```
+
+### Visualizing results
+
+#### Results table
+
+```{r results-table}
+head(go_enrich)
+```
+
+#### Barplot — top enriched terms by gene count
+
+```{r barplot, fig.width=8, fig.height=5}
+barplot(go_enrich, showCategory = 10, title = "GO Enrichment", font.size = 8)
+```
+
+#### Dotplot — enrichment score vs gene ratio
+
+```{r dotplot, fig.width=8, fig.height=6}
+dotplot(go_enrich)
+```
+
+#### Upset plot — gene overlap across enriched terms
+
+```{r upsetplot, fig.width=18, fig.height=12}
+upsetplot(go_enrich)
+```
+
+#### Enrichment map — network of overlapping gene sets
+
+Enriched terms are connected when their gene sets overlap. Functionally related terms cluster together, making it easy to identify broader biological themes.
+
+```{r emapplot, fig.width=10, fig.height=8}
+pairwise_go_enrich <- pairwise_termsim(go_enrich)
+emapplot(pairwise_go_enrich,
+         layout.params = list(layout = "star"),
+         showCategory  = 25,
+         cex.params    = list(category_label = 0.6),
+         shadowtext    = TRUE)
+```
+
+#### Category netplot — genes linked to enriched terms
+
+Shows which individual genes drive each enriched term, and highlights genes belonging to multiple categories.
+
+```{r cnetplot, fig.width=12, fig.height=8}
+cnetplot(go_enrich,
+         categorySize = "pvalue",
+         color.params = list(foldChange = gene_list))
+```
+
+#### Word cloud — term frequency by gene ratio
+
+```{r wordcloud, fig.width=14, fig.height=12}
+wc_df <- data.frame(
+    term = go_enrich$Description,
+    freq = as.integer(gsub("/.*", "", go_enrich$GeneRatio))
+)
+wordcloud(words     = wc_df$term,
+          freq      = wc_df$freq,
+          scale     = c(4, 0.1),
+          colors    = brewer.pal(8, "Dark2"),
+          max.words = 25)
 ```
 
 ---
