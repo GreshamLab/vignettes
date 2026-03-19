@@ -1,464 +1,539 @@
 ---
-title: "ggplot"
+title: "Data visualization with ggplot2"
 author: "David Gresham"
-date: Last compiled on `r Sys.Date()`
+date: "Last compiled on `r Sys.Date()`"
 output:
-  html_notebook: default
-  html_document:
-    df_print: paged
-    toc: yes
+  html_notebook:
+    toc: true
+    toc_float: true
+    theme: flatly
 ---
 
-This document was created for a workshop I ran at NYU in 2018.  It contains explanations and examples of using `ggplot2()` to generate plots using tidy data in R. 
+## Introduction
 
-## ggplot is part of the _tidyverse()_ package
+`ggplot2` is R's most widely used plotting library, built around a principled framework called the **Grammar of Graphics** (Wilkinson, 2005). The core idea is that every plot — no matter how complex — can be described by the same set of components. Once you internalize this grammar, you can build any plot you can imagine by combining these components, rather than hunting for a specific function (like `barplot()`, `hist()`, `boxplot()`) for each plot type.
 
-```{r echo=TRUE, message=TRUE, warning=TRUE}
-#install.packages("tidyverse")
+This contrasts with base R plotting, where each chart type has its own syntax and customization options that you have to learn separately. In `ggplot2`, all plots share the same underlying structure.
+
+## The Grammar of Graphics
+
+A ggplot2 plot is built from the following layers:
+
+| Layer | Function(s) | What it controls |
+|---|---|---|
+| **Data** | `ggplot(data = ...)` | The dataframe to plot |
+| **Aesthetics** | `aes(x, y, color, fill, ...)` | How variables map to visual properties |
+| **Geometries** | `geom_point()`, `geom_histogram()`, ... | The type of mark drawn on the plot |
+| **Statistics** | `stat_summary()`, `geom_smooth()`, ... | Statistical transformations of the data |
+| **Scales** | `scale_x_log10()`, `scale_color_brewer()`, ... | How aesthetic mappings are rendered |
+| **Coordinates** | `coord_flip()`, `coord_cartesian()` | The coordinate space |
+| **Facets** | `facet_wrap()`, `facet_grid()` | Splitting into subplots by a variable |
+| **Themes** | `theme_bw()`, `theme()`, ... | Non-data visual elements (fonts, grid, background) |
+
+You build a plot by starting with `ggplot()` and adding layers with `+`. This makes it easy to build up complexity incrementally and to understand exactly what each piece of code is doing.
+
+## Setup
+
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
+library(ggthemes)   # extra themes; install with install.packages("ggthemes") if needed
 ```
 
-## ggplot
+## Example dataset: *S. cerevisiae* genome features
 
-### the grammar of graphics
+Throughout this vignette we use the *S. cerevisiae* R64 genome annotation (GFF3 format) as our dataset. This gives us a real biological dataset with a mix of continuous (feature length, chromosomal position) and categorical (chromosome, feature type, strand) variables — a common situation in genomics.
 
-- __data__  the data you want to plot
-- __aesthetics__ how the data is mapped
-- __geometries__ vizualization of the data
-- __stats__ representations of data that aid understanding
-- __coordinates__ space on which data is plotted
-- __facets__ how plots are subsetted
-- __themes__ non-data aspects of plots
+We load the GFF3 and derive a clean dataframe of genome features with their lengths.
 
-## ggplot
-
-### topics
-
-- basic plotting
-- scale adjustments
-- position adjustment
-- zooming
-- facetting
-- labels
-- themes
-
-## ggplot
-
-### the basic syntax
-
-```
-ggplot(data = <DATA>, mapping = aes(<Mapping>)) +
-        <GEOM_FUNCTION>()
-```
-
-## ggplot constraints
-
-- data must be in a dataframe
-- data should be in _tidy_ format
-    + each variable must have its own column
-    + each observation must have its own row
-    + each value must have its own cell
-
-- for gene expression data this means one row per gene per experiment
-    + not one row per gene
-
-## example dataset (modified yeast gff file)
-
-```{r, include=FALSE}
-gff <- read_delim("Saccharomyces_cerevisiae.R64-1-1.34.gff3", 
-    "\t", escape_double = FALSE, col_names = FALSE, 
+```{r message=FALSE, warning=FALSE}
+# Read the GFF3, skipping the header comment lines
+gff <- read_delim("../data/Saccharomyces_cerevisiae.R64-1-1.34.gff3",
+    delim = "\t", col_names = FALSE,
     comment = "#", trim_ws = TRUE, skip = 24)
-names(gff) <- c("chromosome", 
-                "source", 
-                "feature", 
-                "start",
-                "stop", 
-                "unknown1",
-                "strand",
-                "unknown2",
-                "info"
-                )
-#correct data types
-gff$feature = as.factor(gff$feature)
-gff$chromosome = as.factor(gff$chromosome)
-gff$strand = as.factor(gff$strand)
 
+names(gff) <- c("chromosome", "source", "feature",
+                "start", "stop", "score", "strand", "phase", "info")
+
+# Set categorical columns as factors
+gff$feature    <- as.factor(gff$feature)
+gff$chromosome <- as.factor(gff$chromosome)
+gff$strand     <- as.factor(gff$strand)
+
+# Subset to feature types of interest; calculate length
 yeast_features <- gff %>%
-        select(chromosome, feature, start, stop, strand) %>%
-        mutate(length = abs(start - stop)) %>%
-        filter(feature == "CDS" | feature == "rRNA" | feature == "snoRNA" | feature == "snRNA" | feature == "tRNA_gene")
-```
+    select(chromosome, feature, start, stop, strand) %>%
+    mutate(length = abs(stop - start)) %>%
+    filter(feature %in% c("CDS", "rRNA", "snoRNA", "snRNA", "tRNA_gene"))
 
-
-```{r, echo=FALSE}
 head(yeast_features)
 ```
 
-## feature and chromosome are factors
+The dataset has `r nrow(yeast_features)` rows — one per annotated genomic feature — and covers `r nlevels(yeast_features$chromosome)` chromosomes and `r nlevels(yeast_features$feature)` feature types.
 
-```{r, echo=TRUE}
+```{r}
+# Feature types and chromosomes present
 levels(yeast_features$feature)
 levels(yeast_features$chromosome)
 ```
 
-## view structure using str() 
+---
 
-```{r echo=TRUE}
-str(yeast_features)
-```
+## Building a plot layer by layer
 
+The key habit to develop with ggplot2 is building plots incrementally. Start with the data and aesthetics, add a geometry, then refine.
 
-## histogram of feature lengths {.smallcode}    
+### Step 1: data + aesthetics
 
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length)) +
-        geom_histogram()
-```
-
-## plot as a continuous distribution
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length)) +
-        geom_freqpoly()
-```
-
-## color according to feature type
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length)) +
-        geom_freqpoly(mapping = aes(color = feature))
-```
-
-## Plot as a probability density
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..,color = feature)) +
-        geom_freqpoly()
-```
-
-## Plot all data using geom_point
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
-        geom_point(aes(color = feature))
-```
-
-## Dealing with overplotting using jitter
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
-        geom_point(aes(color = feature), position = "jitter")
-```
-
-## Dealing with overplotting using alpha
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
-        geom_jitter(aes(color = feature), alpha = 1/10)
-```
-
-## Boxplots using geom_boxplot()
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
-        geom_boxplot()
-```
-
-## Mapping aesthetics within layers
-
-```{r, echo=TRUE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length, color = feature)) +
-        geom_boxplot()
-```
-
-## Combining layers
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
-        geom_boxplot() + 
-        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature))
-```
-
-## Modifying scales
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
-        geom_boxplot() + 
-        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature)) +
-        scale_y_log10()
-
-```
-
-## Changing the order using reorder
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = reorder(chromosome, length, FUN = median), y = length)) +
-        geom_boxplot() + 
-        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature)) +
-        scale_y_log10()
-
-```
-
-## Flipping coordinates {.smaller}
-
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = reorder(chromosome, length, FUN = median), y = length)) +
-        geom_boxplot() + 
-        geom_point(position = "jitter", shape = ".", mapping= aes(color = feature)) +
-        scale_y_log10() +
-        coord_flip()
-
-```
-
-## Barplots
-With one categorical datatype (factor): chromosome
-
-```{r, echo=TRUE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = chromosome)) +
-        geom_bar()
-```
-
-## Barplots
-two categorical datatypes/factors: chromosome & features
-
-```{r, echo=TRUE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
-        geom_bar()
-```
-
-## Barplot variant: fill
-
-```{r, echo=TRUE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
-        geom_bar(position = "fill")
-```
-
-## Barplot variant: dodge
-
-```{r, echo=TRUE}
-ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
-        geom_bar(position = "dodge")
-```
-
-## Computing and ploting statistics
-
-```{r, echo=TRUE}
-ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
-        stat_summary(fun.data = mean_sdl)
-```
-
-
-
-## Facetting plots
-
-```{r, echo=TRUE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, fill = chromosome)) +
-        geom_histogram() + 
-        facet_wrap( ~ chromosome) 
-```
-
-## Facetting (grid)
-```{r, echo=TRUE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
-        geom_histogram() + 
-        facet_wrap(feature ~ strand, nrow = 2) 
-```
-
-## Scatter plots
-
-```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
-        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
-        scale_x_log10() + 
-        scale_y_log10()
-```
-
-## Statistics: adding trend line
-
-```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
-        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
-        scale_x_log10() + 
-        scale_y_log10() + 
-        geom_smooth()
-```
-
-## Statistics: controlling trend line
-
-```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
-        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
-        scale_x_log10() + 
-        scale_y_log10() + 
-        geom_smooth(method = "lm")
-```
-
-## Colors (setting color)
-
-```{r, echo=TRUE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, fill = chromosome)) +
-        geom_histogram(fill = "red") + 
-        scale_x_log10() +
-        facet_wrap( ~ chromosome) 
-```
-
-## Zooming in with coord_cartesian()
-
-```{r echo=TRUE, fig.height=3.5, fig.width=4.5, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
-        geom_point(aes(size = feature, color = feature, shape = feature), alpha = 1/3) +
-        scale_x_log10() + 
-        scale_y_log10() + 
-        geom_smooth() +
-        coord_cartesian(xlim = c(10,5000), ylim = c(10,5000))
-```
-
-## Adding Labels to plots
-```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
-        geom_freqpoly(mapping = aes(color = feature)) +
-        scale_x_log10() +
-        labs(
-                title = "Distribution of feature sizes",
-                x = "length (base pairs)",
-                y = "probability density"
-        ) + 
-        theme(legend.position = "bottom")
-```
-
-## Themes change the overall look
-
-```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
-        geom_freqpoly(mapping = aes(color = feature)) +
-        scale_x_log10() +
-        labs(
-                title = "Distribution of feature sizes",
-                x = "length (base pairs)",
-                y = "probability density"
-        ) + 
-        theme(legend.position = "bottom") + 
-        theme_light()
-```
-
-## Themes
-
-more themes available in add-on package __ggthemes__
+`ggplot()` alone produces an empty canvas — it knows what data to use and which variables map to x and y, but hasn't been told how to draw anything yet.
 
 ```{r}
-#install.packages("ggthemes")
-library(ggthemes)
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length))
 ```
 
-## Additional themes : theme_tufte()
+### Step 2: add a geometry
 
-```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
-        geom_freqpoly(mapping = aes(color = feature)) +
-        scale_x_log10() +
-        theme_tufte()
+Add `geom_boxplot()` to draw the data.
+
+```{r warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+    geom_boxplot()
 ```
 
-## Additional themes : theme_excel()
-Don't do this!
+### Step 3: add more layers
 
-```{r echo=TRUE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE}
-ggplot(data = yeast_features, mapping = aes(x = length, y = ..density..)) +
-        geom_freqpoly(mapping = aes(color = feature)) +
-        scale_x_log10() +
-        theme_excel()
+Layers accumulate. Add a log scale and jittered raw data points on top of the boxplot.
+
+```{r warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+    geom_boxplot() +
+    geom_jitter(aes(color = feature), alpha = 0.2, size = 0.5) +
+    scale_y_log10()
 ```
 
+This pattern — start simple, add layers — is the core ggplot2 workflow.
 
-## Generic plot function
+---
 
-```
-ggplot(data = <DATA>, mapping = aes(<Mapping>)) +
-        <GEOM_FUNCTION>() + 
-        <STAT_FUNCTYION>() +
-        <FACET_FUNCTION>() + 
-        <SCALE_FUNCTION>() +
-        <THEME_FUNCTION>()
-        
-```
+## Aesthetics
 
-## Concise code
-code can be made concise excluding some definitions
+Aesthetics (`aes()`) map variables to visual properties. The most common are:
 
-```{r echo=TRUE, fig.height=3.5, fig.width=6}
-ggplot(yeast_features, aes(length, ..density..)) +
-        geom_freqpoly(aes(color = feature)) +
-        scale_x_log10() +
-        theme(legend.position = "bottom") + 
-        theme_light()
-```
+- `x`, `y` — position
+- `color` / `colour` — outline or line color
+- `fill` — interior color (for bars, boxplots, histograms)
+- `alpha` — transparency (0 = invisible, 1 = opaque)
+- `size` — point size or line width
+- `shape` — point shape
+- `linetype` — line type
 
-## Saving plots as variables
+**Important distinction:** aesthetics set *inside* `aes()` map a variable to a visual property; aesthetics set *outside* `aes()` apply a fixed value to all observations.
 
-```{r, echo=TRUE}
-my_plot <- ggplot(yeast_features, aes(length, ..density..)) +
-        geom_freqpoly(aes(color = feature)) +
-        scale_x_log10() +
-        labs(
-                title = "Distribution of feature sizes",
-                x = "length (base pairs)",
-                y = "probability density"
-        ) + 
-        theme(legend.position = "bottom") + 
-        theme_light()
+```{r warning=FALSE}
+# color mapped to feature type (inside aes) — different color per feature
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+    geom_jitter(aes(color = feature), alpha = 0.3, size = 0.5)
 ```
 
-## Adding to plot variables
-
-```{r, echo=TRUE}
-my_plot + geom_hline(yintercept = 2, color = "red")
+```{r warning=FALSE}
+# color fixed to "steelblue" (outside aes) — all points the same color
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+    geom_jitter(color = "steelblue", alpha = 0.3, size = 0.5)
 ```
 
-## Exercise 1
-Add: 1. new axis labels, 2. title, 3. trend line, and 4. change theme to tufte_theme
+---
 
-```{r fig.height=4, fig.width=4}
-ggplot(data = a, aes(x = x, y = y, color = Class))+
-        geom_point(size = 3)
-```
+## Common geometries
 
-## Read in and modify gff
+### Distributions: histograms and frequency polygons
 
-```{r echo=TRUE}
-gff <- read_delim("Saccharomyces_cerevisiae.R64-1-1.34.gff3", 
-    "\t", escape_double = FALSE, col_names = FALSE, 
-    comment = "#", trim_ws = TRUE, skip = 24)
-names(gff) <- c("chromosome", 
-                "source", 
-                "feature", 
-                "start",
-                "stop", 
-                "unknown1",
-                "strand",
-                "unknown2",
-                "info"
-                )
-#correct data types
-gff$feature = as.factor(gff$feature)
-gff$chromosome = as.factor(gff$chromosome)
-gff$strand = as.factor(gff$strand)
-
-yeast_features <- gff %>%
-        select(chromosome, feature, start, stop, strand) %>%
-        mutate(length = abs(start - stop)) %>%
-        filter(feature == "CDS" | feature == "rRNA" | feature == "snoRNA" | feature == "snRNA" | feature == "tRNA_gene")
-```
-
-## Exercise 2
-Plot as barplots with error bars
-```{r echo=TRUE, fig.height=4, fig.width=4}
-ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
-        stat_summary(fun.data = mean_sdl)
-```
-
-## Exercise 3
-Change bin size for histogram
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE}
+# Histogram of feature lengths
 ggplot(data = yeast_features, mapping = aes(x = length)) +
-        geom_histogram()
+    geom_histogram()
+```
+
+CDS lengths are highly right-skewed — a log scale is more informative.
+
+```{r message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length)) +
+    geom_histogram() +
+    scale_x_log10()
+```
+
+`geom_freqpoly()` draws the same data as a line, which makes it easier to compare distributions across groups.
+
+```{r message=FALSE, warning=FALSE}
+# Compare distributions across feature types
+ggplot(data = yeast_features, mapping = aes(x = length, color = feature)) +
+    geom_freqpoly() +
+    scale_x_log10()
+```
+
+To compare groups with different counts, plot as a probability density using `after_stat(density)`.
+
+```{r message=FALSE, warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = length,
+                                             y = after_stat(density),
+                                             color = feature)) +
+    geom_freqpoly() +
+    scale_x_log10()
+```
+
+### Scatter plots
+
+`geom_point()` for two continuous variables. With many points, use `alpha` to reveal density.
+
+```{r warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = start, y = length)) +
+    geom_point(aes(color = feature), alpha = 0.2, size = 0.8) +
+    scale_y_log10()
+```
+
+### Dealing with overplotting on categorical axes
+
+When x is categorical, `geom_point()` stacks all points directly on top of each other. Use `geom_jitter()` to add random horizontal noise so individual points are visible.
+
+```{r warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+    geom_jitter(aes(color = feature), alpha = 0.15, size = 0.5) +
+    scale_y_log10()
+```
+
+### Boxplots and violin plots
+
+Boxplots and violin plots summarize distributions across groups. Violin plots are often more informative because they show the full distribution shape, not just quartiles.
+
+```{r warning=FALSE}
+# Boxplot
+ggplot(data = yeast_features, mapping = aes(x = chromosome, y = length)) +
+    geom_boxplot() +
+    scale_y_log10()
+```
+
+```{r warning=FALSE}
+# Violin plot — shows distribution shape
+ggplot(data = yeast_features, mapping = aes(x = feature, y = length, fill = feature)) +
+    geom_violin() +
+    scale_y_log10() +
+    theme(legend.position = "none")   # legend is redundant when x = fill
+```
+
+Combine layers to show both summary and raw data:
+
+```{r warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
+    geom_violin(fill = "grey90") +
+    geom_jitter(aes(color = feature), alpha = 0.2, size = 0.5) +
+    scale_y_log10() +
+    theme(legend.position = "none")
+```
+
+### Bar plots
+
+`geom_bar()` counts observations in each group by default (`stat = "count"`).
+
+```{r}
+# Count features per chromosome, colored by feature type
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+    geom_bar()
+```
+
+The `position` argument controls how bars for multiple groups are arranged:
+
+```{r}
+# "fill" normalizes to 100% — useful for comparing proportions
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+    geom_bar(position = "fill") +
+    labs(y = "proportion")
+```
+
+```{r}
+# "dodge" places bars side by side
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+    geom_bar(position = "dodge")
+```
+
+---
+
+## Scales
+
+Scales control how aesthetic mappings are rendered — axis limits, transformations, color palettes, etc.
+
+### Axis transformations
+
+Log transformation is essential for biological data that spans orders of magnitude (gene expression, feature lengths, allele frequencies).
+
+```{r warning=FALSE}
+# Without log scale — skewed data is uninterpretable
+ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
+    geom_boxplot()
+```
+
+```{r warning=FALSE}
+# With log scale — distributions are clear
+ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
+    geom_boxplot() +
+    scale_y_log10()
+```
+
+### Reordering categorical axes
+
+By default, factor levels are ordered alphabetically. Use `reorder()` to sort by a summary statistic (e.g., median), which often makes plots much easier to read.
+
+```{r warning=FALSE}
+ggplot(data = yeast_features,
+       mapping = aes(x = reorder(chromosome, length, FUN = median), y = length)) +
+    geom_boxplot() +
+    scale_y_log10() +
+    labs(x = "chromosome")
+```
+
+### Color scales
+
+For **colorblind accessibility**, prefer `scale_color_viridis_d()` (discrete) or `scale_color_viridis_c()` (continuous) over the ggplot2 default palette.
+
+```{r warning=FALSE}
+ggplot(data = yeast_features,
+       mapping = aes(x = length, y = after_stat(density), color = feature)) +
+    geom_freqpoly() +
+    scale_x_log10() +
+    scale_color_viridis_d()
+```
+
+---
+
+## Facets
+
+Faceting splits the data into subplots by one or more variables. This is one of ggplot2's most powerful features for exploring multi-dimensional data.
+
+`facet_wrap()` wraps subplots into a grid by one variable:
+
+```{r warning=FALSE, fig.width=10}
+ggplot(data = yeast_features, mapping = aes(x = length, fill = chromosome)) +
+    geom_histogram(show.legend = FALSE) +
+    scale_x_log10() +
+    facet_wrap(~chromosome)
+```
+
+`facet_grid()` creates a two-way grid using two variables:
+
+```{r warning=FALSE, fig.width=10}
+ggplot(data = yeast_features, mapping = aes(x = length)) +
+    geom_histogram() +
+    scale_x_log10() +
+    facet_grid(feature ~ strand)
+```
+
+---
+
+## Statistics
+
+Some geoms compute statistics internally (e.g., `geom_histogram()` bins data, `geom_boxplot()` computes quartiles). You can also add explicit statistical layers.
+
+### Trend lines with `geom_smooth()`
+
+```{r warning=FALSE}
+# Default: LOESS smoother
+ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
+    geom_point(aes(color = feature), alpha = 0.2, size = 0.5) +
+    geom_smooth() +
+    scale_x_log10() +
+    scale_y_log10()
+```
+
+```{r warning=FALSE}
+# Linear model
+ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
+    geom_point(aes(color = feature), alpha = 0.2, size = 0.5) +
+    geom_smooth(method = "lm") +
+    scale_x_log10() +
+    scale_y_log10()
+```
+
+### Summary statistics with `stat_summary()`
+
+```{r}
+# Mean ± 2 SD (mean_sdl)
+ggplot(data = yeast_features, mapping = aes(x = feature, y = length)) +
+    stat_summary(fun.data = mean_sdl) +
+    scale_y_log10()
+```
+
+---
+
+## Labels and themes
+
+### Labels
+
+Every published plot should have axis labels and a title. Use `labs()`:
+
+```{r message=FALSE, warning=FALSE}
+ggplot(data = yeast_features,
+       mapping = aes(x = length, y = after_stat(density), color = feature)) +
+    geom_freqpoly() +
+    scale_x_log10() +
+    scale_color_viridis_d() +
+    labs(
+        title = "Size distribution of S. cerevisiae genome features",
+        x = "Feature length (bp)",
+        y = "Probability density",
+        color = "Feature type"
+    )
+```
+
+### Themes
+
+Themes control all non-data visual elements. Built-in options:
+
+```{r message=FALSE, warning=FALSE}
+p <- ggplot(data = yeast_features,
+            mapping = aes(x = length, y = after_stat(density), color = feature)) +
+    geom_freqpoly() +
+    scale_x_log10() +
+    scale_color_viridis_d() +
+    labs(x = "Feature length (bp)", y = "Probability density", color = "Feature type")
+
+p + theme_bw()       # clean white background — good for presentations
+p + theme_classic()  # minimal — good for publications
+p + theme_light()    # light grey gridlines
+```
+
+`ggthemes` provides additional options including Tufte's minimalist style:
+
+```{r message=FALSE, warning=FALSE}
+p + theme_tufte()
+```
+
+You can fine-tune any element within a theme using `theme()`. A common adjustment is moving the legend:
+
+```{r message=FALSE, warning=FALSE}
+p + theme_classic() + theme(legend.position = "bottom")
+```
+
+---
+
+## Saving plots
+
+Save a plot as a variable and build on it incrementally. When you're done, use `ggsave()` to write a publication-quality file.
+
+```{r}
+# Build and save to a variable
+my_plot <- ggplot(data = yeast_features,
+                  mapping = aes(x = feature, y = length, fill = feature)) +
+    geom_violin() +
+    geom_jitter(alpha = 0.1, size = 0.4) +
+    scale_y_log10() +
+    scale_fill_viridis_d() +
+    labs(
+        title = "Feature length distributions in S. cerevisiae",
+        x = "Feature type",
+        y = "Length (bp)"
+    ) +
+    theme_classic() +
+    theme(legend.position = "none")
+
+my_plot
+```
+
+```{r eval=FALSE}
+# Save as PDF (vector format — preferred for publication) or PNG
+ggsave("feature_lengths.pdf", plot = my_plot, width = 6, height = 4)
+ggsave("feature_lengths.png", plot = my_plot, width = 6, height = 4, dpi = 300)
+```
+
+Storing a plot as a variable also lets you add layers to a finished plot:
+
+```{r warning=FALSE}
+# Add a horizontal reference line to an existing plot
+my_plot + geom_hline(yintercept = 1000, color = "red", linetype = "dashed")
+```
+
+---
+
+## Coordinate systems
+
+`coord_flip()` swaps x and y axes — useful when category labels are long:
+
+```{r warning=FALSE}
+ggplot(data = yeast_features,
+       mapping = aes(x = reorder(chromosome, length, FUN = median), y = length)) +
+    geom_boxplot() +
+    scale_y_log10() +
+    labs(x = "chromosome") +
+    coord_flip()
+```
+
+`coord_cartesian()` zooms without dropping data (unlike setting axis limits in `scale_*`):
+
+```{r warning=FALSE}
+ggplot(data = yeast_features, mapping = aes(x = start, y = stop)) +
+    geom_point(aes(color = feature), alpha = 0.2, size = 0.5) +
+    geom_smooth() +
+    coord_cartesian(xlim = c(0, 500000), ylim = c(0, 500000))
+```
+
+---
+
+## Best practices
+
+**Use `theme_classic()` or `theme_bw()` for publication figures.** The default grey background looks fine on screen but prints poorly and is rarely appropriate for papers.
+
+**Label all axes.** Always include units (bp, nt, RPKM, etc.). Use `labs()`.
+
+**Use colorblind-safe palettes.** `scale_color_viridis_d()` and `scale_fill_viridis_d()` are built into ggplot2, perceptually uniform, and work in greyscale.
+
+**Log-transform skewed biological data.** Expression values, feature lengths, allele frequencies — most biological measurements are log-normally distributed. `scale_y_log10()` (or `scale_x_log10()`) makes these distributions readable without modifying the underlying data.
+
+**Show the data.** Overlay raw points on boxplots or violin plots with `geom_jitter()`. Summary statistics alone obscure the distribution and sample size.
+
+**Save plots to variables.** This makes it easy to iterate, add layers, or export at different sizes.
+
+**Use `ggsave()` for output.** It respects the `width`, `height`, and `dpi` arguments. For publication, use PDF or SVG (vector formats); for web/slides, use PNG at 150–300 dpi.
+
+---
+
+## The full syntax
+
+Any ggplot2 call follows this template (most layers are optional):
+
+```r
+ggplot(data = <DATA>, mapping = aes(<MAPPINGS>)) +
+    <GEOM_FUNCTION>(aes(<OPTIONAL_MAPPINGS>)) +
+    <STAT_FUNCTION>() +
+    <SCALE_FUNCTION>() +
+    <FACET_FUNCTION>() +
+    <COORD_FUNCTION>() +
+    <THEME_FUNCTION>() +
+    labs(<LABELS>)
+```
+
+---
+
+## Exercises
+
+### Exercise 1
+Using `yeast_features`, create a histogram of feature lengths, faceted by `feature` type. Use a log10 x-axis and `theme_classic()`. Add appropriate axis labels.
+
+```{r message=FALSE, warning=FALSE}
+# Your code here
+ggplot(data = yeast_features, mapping = aes(x = length)) +
+    geom_histogram()
+```
+
+### Exercise 2
+Recreate the bar plot of feature counts per chromosome, but with bars **dodged** (side by side). Then switch `position = "fill"` to show proportions instead of counts. Which view is more informative for comparing the relative composition of chromosomes?
+
+```{r}
+# Your code here
+ggplot(data = yeast_features, mapping = aes(x = chromosome, fill = feature)) +
+    geom_bar()
+```
+
+### Exercise 3
+Make a scatter plot of `start` vs. `length` for CDS features only (filter first with `dplyr::filter()`). Color points by `chromosome`, use a log10 y-axis, add a linear trend line with `geom_smooth(method = "lm")`, and apply `theme_bw()`.
+
+```{r warning=FALSE}
+# Your code here
+cds_only <- yeast_features %>% filter(feature == "CDS")
+ggplot(data = cds_only, mapping = aes(x = start, y = length))
 ```
