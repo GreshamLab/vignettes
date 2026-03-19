@@ -75,41 +75,6 @@ ggplot(gene_expression_tidy, aes(x = timepoint, y = log2_expression,
     labs(x = "Timepoint", y = "log2 expression", color = "Gene")
 ```
 
-### Example: flow cytometry data
-
-Here is a tidy flow cytometry dataset — each row is one measurement of one sample.
-
-```{r}
-facs_data <- tibble(
-    Sample  = c("A1", "A1", "A2", "A2", "A3", "A3"),
-    Channel = c("FSC", "FL1", "FSC", "FL1", "FSC", "FL1"),
-    Value   = c(3.6, 4.5, 3.5, 3.2, 3.8, 4.2)
-)
-facs_data
-```
-
-But if we want to *correlate* FSC and FL1, we need them as separate columns — one row per sample. `pivot_wider()` does this:
-
-```{r}
-facs_data |> pivot_wider(names_from = Channel, values_from = Value)
-```
-
-### The built-in `table1`, `table2`, `table3`
-
-`tidyverse` ships with example datasets illustrating tidy and untidy forms of the same data:
-
-```{r}
-table1   # tidy: one row per country per year
-table2   # untidy: cases and population are values in a "type" column, not separate columns
-table3   # untidy: rate is cases/population stored as a string in one column
-```
-
-To convert `table2` to tidy format:
-
-```{r}
-table2 |> pivot_wider(names_from = type, values_from = count)
-```
-
 ---
 
 ## The pipe: `|>` and `%>%`
@@ -118,17 +83,39 @@ The pipe passes the result of one function directly into the next. It makes code
 
 R 4.1 introduced the **native pipe** `|>` as a built-in language feature. You may also see `%>%` from the `magrittr` package (included in the tidyverse), which works similarly. Prefer `|>` for new code — it requires no package and is slightly faster.
 
-```{r}
-# Without the pipe — reads inside-out
-summarise(filter(gene_expression_tidy, Gene == "GAP1"), mean_expr = mean(log2_expression))
+Without the pipe, multi-step operations require either deeply nested function calls or saving many intermediate objects. Both approaches are hard to read and error-prone:
 
-# With the pipe — reads left to right
-gene_expression_tidy |>
-    filter(Gene == "GAP1") |>
-    summarise(mean_expr = mean(log2_expression))
+```{r}
+# Option 1: nested calls — must be read inside-out
+arrange(
+    summarise(
+        group_by(
+            filter(gff, feature == "CDS"),
+            chromosome),
+        mean_length = mean(length), n = n()),
+    desc(mean_length))
 ```
 
-The pipe is pronounced **"then"**: *take gene_expression_tidy, then filter for GAP1, then summarize*.
+```{r}
+# Option 2: intermediate objects — clutters the environment with throwaway names
+gff_cds      <- filter(gff, feature == "CDS")
+gff_grouped  <- group_by(gff_cds, chromosome)
+gff_summary  <- summarise(gff_grouped, mean_length = mean(length), n = n())
+arrange(gff_summary, desc(mean_length))
+```
+
+With the pipe, the same operation reads as a clear left-to-right sequence of steps:
+
+```{r}
+# With the pipe — reads as plain English
+gff |>
+    filter(feature == "CDS") |>
+    group_by(chromosome) |>
+    summarise(mean_length = mean(length), n = n()) |>
+    arrange(desc(mean_length))
+```
+
+The pipe is pronounced **"then"**: *take gff, then keep only CDS rows, then group by chromosome, then summarize, then sort by mean length descending*. All three code blocks produce the same result — the pipe version is simply the most readable.
 
 ---
 
@@ -209,8 +196,11 @@ gff |> filter(feature == "CDS")
 gff |> filter(feature == "CDS" & chromosome == "I")
 ```
 
+The `%in%` operator tests whether each value on the left is a member of the vector on the right, returning `TRUE` or `FALSE` for each row. It is the concise equivalent of writing multiple `==` comparisons joined by `|`:
+
 ```{r}
-# %in% is cleaner than chained | for membership tests
+# These two are equivalent, but %in% is cleaner as the list grows
+gff |> filter(feature == "CDS" | feature == "tRNA_gene" | feature == "snoRNA")
 gff |> filter(feature %in% c("CDS", "tRNA_gene", "snoRNA"))
 ```
 
@@ -218,30 +208,31 @@ gff |> filter(feature %in% c("CDS", "tRNA_gene", "snoRNA"))
 
 ```{r}
 gff <- gff |> mutate(length = abs(stop - start))
-gff |> select(chromosome, feature, length)
+gff |> filter(feature == "CDS") |> select(chromosome, feature, length)
 ```
 
-`mutate()` can create multiple columns in one call, and later expressions can reference columns created earlier in the same call:
+`mutate()` can create multiple columns in one call, and later expressions can reference columns created earlier in the same call. Here we add `length` and then immediately use it to classify each CDS as above or below the median:
 
 ```{r}
 gff |>
+    filter(feature == "CDS") |>
     mutate(
-        length    = abs(stop - start),
-        length_kb = length / 1000
+        length     = abs(stop - start),
+        size_class = if_else(length > median(length), "long", "short")
     ) |>
-    select(feature, length, length_kb)
+    select(chromosome, feature, length, size_class)
 ```
 
 ### `arrange()` — sort rows
 
 ```{r}
-# Smallest features first
-gff |> arrange(length) |> select(feature, chromosome, length)
+# Smallest CDS features on chromosome I first
+gff |> filter(feature == "CDS", chromosome == "I") |> arrange(length) |> select(chromosome, feature, length)
 ```
 
 ```{r}
 # Largest first with desc()
-gff |> arrange(desc(length)) |> select(feature, chromosome, length)
+gff |> filter(feature == "CDS", chromosome == "I") |> arrange(desc(length)) |> select(chromosome, feature, length)
 ```
 
 ### `summarise()` — compute summary statistics
@@ -250,6 +241,7 @@ gff |> arrange(desc(length)) |> select(feature, chromosome, length)
 
 ```{r}
 gff |>
+    filter(feature == "CDS", chromosome == "I") |>
     summarise(
         mean_length = mean(length),
         sd_length   = sd(length),
@@ -265,6 +257,7 @@ Combining `group_by()` with `summarise()` is one of the most common patterns in 
 
 ```{r}
 gff |>
+    filter(chromosome == "I") |>
     group_by(feature) |>
     summarise(
         mean_length = mean(length),
@@ -274,14 +267,14 @@ gff |>
     arrange(desc(mean_length))
 ```
 
-Always `ungroup()` after grouped operations if you're going to pass the result downstream — otherwise later operations may behave unexpectedly.
+Use `.groups = "drop"` in `summarise()` to avoid leaving the result in a grouped state, which can cause surprising behavior in downstream operations:
 
 ```{r}
 gff |>
-    filter(feature %in% c("CDS", "tRNA_gene", "snoRNA", "snRNA", "rRNA")) |>
-    group_by(feature, chromosome) |>
+    filter(chromosome == "I") |>
+    group_by(feature) |>
     summarise(n = n(), mean_length = mean(length), .groups = "drop") |>
-    arrange(chromosome, feature)
+    arrange(desc(n))
 ```
 
 ### Piping into ggplot2
@@ -324,14 +317,14 @@ gene_expression |>
 
 ### `pivot_wider()` — long to wide
 
-Use when one observation is spread across multiple rows. Makes the table wider.
+Use when one observation is spread across multiple rows. Makes the table wider. Here we reverse the pivot to recover the original wide format:
 
 ```{r}
-facs_data                  # long — FSC and FL1 are in rows
+gene_expression_tidy       # long — one row per gene per timepoint
 ```
 
 ```{r}
-facs_data |> pivot_wider(names_from = Channel, values_from = Value)
+gene_expression_tidy |> pivot_wider(names_from = timepoint, values_from = log2_expression)
 ```
 
 ### Correlation plots require wide format
@@ -441,13 +434,24 @@ deg_annotated <- deg_results |>
 deg_annotated
 ```
 
-`anti_join()` is useful for quality control — finding rows in one table that failed to match:
+`anti_join()` is useful for quality control — finding rows in one table that have **no** match in another. This is a common situation when merging data from different sources where IDs may not overlap perfectly.
 
 ```{r}
-# Any DEG results that didn't match a gene annotation?
-deg_results |>
+# Suppose a collaborator gives us a list of candidate gene IDs to look up —
+# some are valid systematic names, some contain typos or non-standard identifiers
+candidate_genes <- tibble(
+    systematic_name = c("YAL001C", "YAL002W", "YAL003W",
+                        "YAL001c",    # typo: lowercase
+                        "GAP1",       # common name, not systematic
+                        "YAL999X")    # doesn't exist
+)
+
+# anti_join returns the rows that failed to match — immediate QC feedback
+candidate_genes |>
     anti_join(gff_genes, by = "systematic_name")
 ```
+
+The three unmatched rows flag the problem IDs before they silently disappear in a `left_join`.
 
 ---
 
