@@ -43,11 +43,11 @@ Before running the analysis we formatted data as follows:
 This step defines the files that will be read in, the output files, the number of measurements made during the experiment and the well in which the blank(s) is located.
 ```{r}
 # Path to directory with csv with OD data and sample sheet - put the last / after
-filepath = '/Volumes/GoogleDrive/My Drive/Gresham Lab_David/Tecan/'
+filepath = ''   # data files are in the same directory as this Rmd
 # sample sheet file name
 s_sheet = 'samplesheet.csv'
 # data csv
-data_file = 'ODonly_David_Ina_OD_mCit_YPD_Glnlim_11012022-001.csv'
+data_file = 'David_Ina_OD_mCit_YPD_Glnlim_11012022-001.csv'
 # specific the number of cycles
 cycles = 283
 # output csv name
@@ -61,7 +61,6 @@ knitr::opts_chunk$set(fig.height=6, fig.width=5,
                       cache=TRUE, autodep = TRUE, cache.path = 'facet-rep-labels/')
 library(tidyverse)
 library(growthcurver)
-setwd(filepath)
 theme_set(theme_minimal())
 ```
 
@@ -73,10 +72,12 @@ samplesheet = read_csv(paste0(filepath, s_sheet))
 knitr::kable(samplesheet)
 
 #remove s from time and convert to numeric, divide by 60 2x to go from seconds to hours
-data_od = read_csv(paste0(filepath,data_file), 
-                   skip = 0, n_max = cycles) 
+data_od = read_csv(paste0(filepath,data_file),
+                   skip = 0, n_max = cycles)
 colnames(data_od)[1] <- "time"
 data_od$time <- as.numeric(str_remove(data_od$time,"s"))/60/60
+# drop any spurious non-numeric columns (e.g. trailing-comma artifact from Tecan export)
+data_od <- data_od %>% select(where(is.numeric))
 
 knitr::kable(data_od)
 ```
@@ -141,18 +142,13 @@ Visual inspection of the data allows us to identify any wells that contain poorl
 outlier_wells = c('D1','D6')
 
 #remove outliers
-for(i in length(outlier_wells)) {
-  data_od = data_od %>%
-    select(!-!as.name(outlier_wells[i]))
-}
+data_od <- data_od %>% select(-all_of(outlier_wells))
 ```
 
 # Using Growthcurver to fit curve data to logistic equation
 
 The R package `Growthcurver` fits the growth rate data to the logistic equation below.
-```{r}
-knitr::include_graphics('logistic_eqn.png')
-```
+$$N(t) = \frac{K}{1 + \frac{K - N_0}{N_0} \cdot e^{-rt}}$$
 
 
 In this equation:
